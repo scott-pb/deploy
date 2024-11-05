@@ -1,0 +1,18 @@
+admin_test:
+  project_config:
+    project_path: project/admin_test
+    bin_path: project/admin_test/bin
+    git_url: http://192.168.0.13/platform/soga_admin
+  client_config:
+    host: 192.168.0.30
+    port: 22
+    user: root
+    password: admin@123
+  git_config:
+    user_name: bin.peng
+    pass_word: pb123654
+  build_configs:
+    - env: admin
+      mod_path: project/admin_test
+      bin_name: bin/soga_admin
+      name: soga_admin
