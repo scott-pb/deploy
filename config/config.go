@@ -8,8 +8,12 @@ import (
 var Config config
 
 type config struct {
-	AdminTest    Configure `json:"admin_test" yaml:"admin_test"`
-	AdminRelease Configure `json:"admin_release" yaml:"admin_release"`
+	Ip                string    `json:"ip" yaml:"ip"`
+	AdminTest         Configure `json:"admin_test" yaml:"admin_test"`
+	EnterpriseTest    Configure `json:"im_enterprise_test" yaml:"im_enterprise_test"`
+	ServerTest        Configure `json:"im_server_test" yaml:"im_server_test"`
+	AdminRelease      Configure `json:"admin_release" yaml:"admin_release"`
+	EnterpriseRelease Configure `json:"im_enterprise_release" yaml:"im_enterprise_release"`
 }
 
 type Configure struct {
@@ -17,12 +21,15 @@ type Configure struct {
 	ClientConfig  `json:"client_config" yaml:"client_config"`
 	GitConfig     `json:"git_config" yaml:"git_config"`
 	BuildConfigs  []BuildConfig `json:"build_configs" yaml:"build_configs"`
+	ZipFilePath   string        `json:"zip_file_path" yaml:"zip_file_path"`
+	ZipName       string        `json:"zip_name" yaml:"zip_name"`
+	ServerPath    string        `json:"server_path" yaml:"server_path"`
 }
 
 type BuildConfig struct {
 	Env     string `json:"env" yaml:"env"`
 	ModPath string `json:"mod_path" yaml:"mod_path"`
-	Bin     string `json:"bin" yaml:"bin"`
+	BinName string `json:"bin_name" yaml:"bin_name"`
 	Name    string `json:"name" yaml:"name"`
 }
 

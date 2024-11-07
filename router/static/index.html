@@ -163,7 +163,7 @@
                 <input name="branch" type="text" value="dev" class="custom-input"/>
             </div>
 
-            <div class="group custom-select" id="item-select">
+            <div class="group custom-select" id="item-select" style="display: flex;flex-wrap: wrap; ">
 
             </div>
 
@@ -217,7 +217,11 @@
 
         ws.onmessage = function (event) {
             if (event.data === "pong") {
-                console.log(event.data)
+                return
+            }
+
+            if (event.data.indexOf("文件上传中") !== -1) {
+                document.getElementById('messages').innerHTML += event.data + '<br>';
                 return
             }
             document.getElementById('messages').innerHTML += event.data + '<br>';
@@ -250,6 +254,13 @@
 
     document.getElementById('onsubmit').addEventListener('click', function () {
         if (ws && ws.readyState === WebSocket.OPEN) {
+            if (document.querySelector('input[name="env"]:checked').value === "release") {
+                let userChoice = confirm("你确定要继续吗？");
+                if (!userChoice) {
+                    return
+                }
+            }
+
             const form = document.getElementById('form');
             const formData = {};
             for (const element of form.elements) {
@@ -286,11 +297,15 @@
         let items = [];
         switch (this.value) {
             case "enterprise":
-                items = ["api-chat", "api-chatroom", "rpc-chat", "rpc-game", "cron"];
-                document.getElementById('item-select').innerHTML = '<label>工程:</label><label><input type="checkbox" name="items" checked value="all">all</label>';
+                items = ["soga_api_chat", "soga_api_chatroom", "soga_rpc_chat", "soga_rpc_game", "soga_cron", "soga_tool"];
+                document.getElementById('item-select').innerHTML = '<label>工程:</label>';
                 break
             case "server":
-                document.getElementById('item-select').innerHTML = '<label>工程:</label><label><input type="checkbox" name="items" checked value="all">all</label>';
+                items = ["soga_im_api", "soga_im_msg_gateway", "soga_im_msg_transfer", "soga_im_push",
+                    "soga_im_rpc_auth", "soga_im_rpc_cache", "soga_im_rpc_conversation", "soga_im_rpc_friend",
+                    "soga_im_rpc_group", "soga_im_rpc_msg", "soga_im_rpc_office", "soga_im_rpc_organization",
+                    "soga_im_rpc_user"];
+                document.getElementById('item-select').innerHTML = '<label>工程:</label>';
                 break
             default:
                 document.getElementById('item-select').innerHTML = '';

@@ -60,17 +60,18 @@ func (w *WebSocket) WebSocketHandler(c *gin.Context) {
 			case constant.Test:
 				s.AdminTest(ws, message.Branch)
 			case constant.Release:
-				//s.AdminRelease(ws, message.Branch)
+				s.AdminRelease(ws, message.Branch)
 			}
 		case constant.Enterprise:
 			switch message.Env {
 			case constant.Test:
-				//s.EnterpriseTest(ws, message)
+				s.EnterpriseTest(ws, message)
 			case constant.Release:
 			}
 		case constant.Server:
 			switch message.Env {
 			case constant.Test:
+				s.ServerTest(ws, message)
 			case constant.Release:
 			}
 		}

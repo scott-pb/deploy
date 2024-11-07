@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 )
@@ -30,68 +31,8 @@ type ClientConfig struct {
 }
 
 var (
-	d, _    = os.Getwd()
-	dir     = strings.ReplaceAll(d, "\\", "/") + "/"
-	gitAuth = &http.BasicAuth{
-		Username: "bin.peng",
-		Password: "pb123654",
-	}
-	testConf = &ClientConfig{
-		Host:     "192.168.0.30",
-		Port:     "22",
-		User:     "root",
-		Password: "admin@123",
-	}
-	releaseConf = &ClientConfig{
-		Host:     "8.212.40.18",
-		Port:     "22",
-		User:     "root",
-		Password: "X@135791667",
-	}
-)
-
-var (
-	testAdminClientPath    = "/root/soga/soga_im_admin_server"
-	releaseAdminClientPath = "/root/soga_admin_server"
-)
-
-var (
-	enterpriseProjectPath    = dir + "/project/soga_im_enterprise"
-	enterpriseBinPath        = enterpriseProjectPath + "/bin"
-	enterpriseZipName        = "im_enterprise.zip"
-	enterpriseZip            = enterpriseBinPath + "/im_enterprise.zip"
-	enterpriseGitUrl         = "http://192.168.0.13/server/soga_im_enterprise"
-	testEnterpriseClientPath = "/root/soga/soga_im_enterprise/bin"
-	nameMap                  = map[string]string{
-		"api-chat":     enterpriseBinPath + "/soga_api_chat",
-		"api-chatroom": enterpriseBinPath + "/soga_api_chatroom",
-		"rpc-chat":     enterpriseBinPath + "/soga_rpc_chat",
-		"rpc-game":     enterpriseBinPath + "/soga_rpc_game",
-		"cron":         enterpriseBinPath + "/soga_cron",
-	}
-	enterpriseBuildPathMap = map[string]string{
-		"api-chat":     enterpriseProjectPath + "/cmd/api/chat",
-		"api-chatroom": enterpriseProjectPath + "/cmd/api/chatroom",
-		"rpc-chat":     enterpriseProjectPath + "/cmd/rpc/chat",
-		"rpc-game":     enterpriseProjectPath + "/cmd/rpc/game",
-		"cron":         enterpriseProjectPath + "/cmd/cron",
-	}
-
-	enterpriseBinNameMap = map[string]string{
-		"api-chat":     "soga_api_chat",
-		"api-chatroom": "soga_api_chatroom",
-		"rpc-chat":     "soga_rpc_chat",
-		"rpc-game":     "soga_rpc_game",
-		"cron":         "soga_cron",
-	}
-
-	enterpriseRestartMap = map[string]string{
-		"api-chat":     "soga_api_chat",
-		"api-chatroom": "soga_api_chatroom",
-		"rpc-chat":     "soga_api_rpc_chat",
-		"rpc-game":     "soga_api_rpc_game",
-		"cron":         "soga_cron",
-	}
+	d, _ = os.Getwd()
+	dir  = strings.ReplaceAll(d, "\\", "/") + "/"
 )
 
 type Message struct {
@@ -103,110 +44,210 @@ type Message struct {
 
 func (d *DeployService) AdminTest(conn *websocket.Conn, branch string) {
 	adminConf := config.Config.AdminTest
-	auth := &http.BasicAuth{
-		Username: adminConf.GitConfig.UserName,
-		Password: adminConf.GitConfig.PassWord,
+	err := os.Chdir(dir)
+	if err != nil {
+		flush("Chdir err"+err.Error(), conn)
 	}
-	gitLog, err := d.Git(adminConf.ProjectPath, adminConf.GitUrl, branch, auth, conn)
+	gitLog, err := d.Git(adminConf, branch, conn)
 	if err != nil {
 		return
 	}
 
-	m := map[string]string{
-		adminConf.BinPath: adminConf.ProjectPath,
-	}
-	if err = d.Build(m, adminConf.BinPath, gitLog, conn); err != nil {
+	if err = d.Build(adminConf, gitLog, conn); err != nil {
 		return
 	}
-	//if err = d.ZipFiles(adminZip, []string{adminBuildBinName}, conn); err != nil {
-	//	return
-	//}
-	//_ = d.ScpUpload(testConf, adminZip, testAdminClientPath, adminZipName, adminBinName, "pm2 restart soga_admin", conn)
+
+	if err = d.ZipFiles(adminConf.ProjectPath, adminConf.ZipFilePath, []string{adminConf.BuildConfigs[0].BinName}, conn); err != nil {
+		return
+	}
+
+	_ = d.ScpUpload(adminConf, adminConf.BuildConfigs[0].Name, "pm2 restart soga_admin", conn)
 	return
 }
 
-//func (d *DeployService) AdminRelease(conn *websocket.Conn, branch string) {
-//	gitLog, err := d.Git(adminProjectPath, adminGitUrl, branch, conn)
-//	if err != nil {
-//		return
-//	}
-//	m := map[string]string{
-//		adminBuildBinName: adminProjectPath,
-//	}
-//	if err = d.Build(m, adminBinPath, gitLog, conn); err != nil {
-//		return
-//	}
-//	if err = d.ZipFiles(adminZip, []string{adminBuildBinName}, conn); err != nil {
-//		return
-//	}
-//	_ = d.ScpUpload(releaseConf, adminZip, releaseAdminClientPath, adminZipName, adminBinName, "supervisorctl restart soga_admin", conn)
-//	return
-//}
+func (d *DeployService) AdminRelease(conn *websocket.Conn, branch string) {
+	adminConf := config.Config.AdminRelease
+	if err := os.Chdir(dir); err != nil {
+		flush("Chdir err"+err.Error(), conn)
+	}
 
-//func (d *DeployService) EnterpriseTest(conn *websocket.Conn, msg Message) {
-//	gitLog, err := d.Git(enterpriseProjectPath, enterpriseGitUrl, msg.Branch, conn)
-//	if err != nil {
-//		return
-//	}
-//
-//	m := make(map[string]string)
-//	files := make([]string, 0)
-//	binName := make([]string, 0)
-//	restartName := make([]string, 0)
-//	if slices.Contains(msg.Items, "all") {
-//		for k, v := range nameMap {
-//			files = append(files, v)
-//			binName = append(binName, enterpriseBinNameMap[k])
-//			restartName = append(restartName, enterpriseRestartMap[k])
-//			m[v] = enterpriseBuildPathMap[k]
-//		}
-//	} else {
-//		for _, k := range msg.Items {
-//			binName = append(binName, enterpriseBinNameMap[k])
-//			restartName = append(restartName, enterpriseRestartMap[k])
-//			files = append(files, nameMap[k])
-//			m[nameMap[k]] = enterpriseBuildPathMap[k]
-//		}
-//	}
-//
-//	if err = d.Build(m, adminBinPath, gitLog, conn); err != nil {
-//		return
-//	}
-//
-//	if err = d.ZipFiles(enterpriseZip, files, conn); err != nil {
-//		return
-//	}
-//	_ = d.ScpUpload(testConf, enterpriseZip, testEnterpriseClientPath, enterpriseZipName, strings.Join(binName, " "), "pm2 restart "+strings.Join(restartName, " "), conn)
-//	return
-//}
+	gitLog, err := d.Git(adminConf, branch, conn)
+	if err != nil {
+		return
+	}
+
+	if err = d.Build(adminConf, gitLog, conn); err != nil {
+		return
+	}
+
+	if err = d.ZipFiles(adminConf.ProjectPath, adminConf.ZipFilePath, []string{adminConf.BuildConfigs[0].BinName}, conn); err != nil {
+		return
+	}
+
+	_ = d.ScpUpload(adminConf, adminConf.BuildConfigs[0].Name, "supervisorctl restart soga_admin", conn)
+	return
+}
+
+func (d *DeployService) EnterpriseTest(conn *websocket.Conn, msg Message) {
+	cfg := config.Config.EnterpriseTest
+
+	gitLog, err := d.Git(cfg, msg.Branch, conn)
+	if err != nil {
+		return
+	}
+
+	files := make([]string, 0)
+	fileNames := make([]string, 0)
+	binNames := make([]string, 0)
+
+	newBuildConfig := make([]config.BuildConfig, 0)
+	for _, item := range msg.Items {
+		for _, bcfg := range cfg.BuildConfigs {
+			if item == bcfg.Env {
+				newBuildConfig = append(newBuildConfig, bcfg)
+			}
+		}
+	}
+	cfg.BuildConfigs = newBuildConfig
+
+	for _, bcfg := range cfg.BuildConfigs {
+		files = append(files, bcfg.BinName)
+		fileNames = append(fileNames, bcfg.Name)
+		if bcfg.Name != "soga_tool" {
+			binNames = append(binNames, bcfg.Name)
+		}
+	}
+
+	if err = d.Build(cfg, gitLog, conn); err != nil {
+		return
+	}
+
+	if err = d.ZipFiles(cfg.ProjectPath, cfg.ZipFilePath, files, conn); err != nil {
+		return
+	}
+
+	_ = d.ScpUpload(cfg, strings.Join(fileNames, " "), "pm2 restart "+strings.Join(binNames, " "), conn)
+
+	return
+}
+
+func (d *DeployService) ServerTest(conn *websocket.Conn, msg Message) {
+	cfg := config.Config.ServerTest
+
+	gitLog, err := d.Git(cfg, msg.Branch, conn)
+	if err != nil {
+		return
+	}
+
+	files := make([]string, 0)
+	fileNames := make([]string, 0)
+
+	newBuildConfig := make([]config.BuildConfig, 0)
+	for _, item := range msg.Items {
+		for _, bcfg := range cfg.BuildConfigs {
+			if item == bcfg.Env {
+				newBuildConfig = append(newBuildConfig, bcfg)
+			}
+		}
+	}
+	cfg.BuildConfigs = newBuildConfig
+
+	for _, bcfg := range cfg.BuildConfigs {
+		files = append(files, bcfg.BinName)
+		fileNames = append(fileNames, bcfg.Name)
+	}
+
+	if err = d.Build(cfg, gitLog, conn); err != nil {
+		return
+	}
+
+	if err = d.ZipFiles(cfg.ProjectPath, cfg.ZipFilePath, files, conn); err != nil {
+		return
+	}
+
+	_ = d.ScpUpload(cfg, strings.Join(fileNames, " "), "pm2 restart "+strings.Join(fileNames, " "), conn)
+
+	return
+}
+
+func (d *DeployService) EnterpriseRelease(conn *websocket.Conn, msg Message) {
+	cfg := config.Config.EnterpriseTest
+
+	gitLog, err := d.Git(cfg, msg.Branch, conn)
+	if err != nil {
+		return
+	}
+
+	files := make([]string, 0)
+	fileNames := make([]string, 0)
+	binNames := make([]string, 0)
+	if !slices.Contains(msg.Items, "all") {
+		newBuildConfig := make([]config.BuildConfig, 0)
+		for _, item := range msg.Items {
+			for _, bcfg := range cfg.BuildConfigs {
+				if item == bcfg.Env {
+					newBuildConfig = append(newBuildConfig, bcfg)
+				}
+			}
+		}
+		cfg.BuildConfigs = newBuildConfig
+	}
+
+	for _, bcfg := range cfg.BuildConfigs {
+		files = append(files, bcfg.BinName)
+		fileNames = append(fileNames, bcfg.Name)
+		if bcfg.Name != "soga_tool" {
+			binNames = append(binNames, bcfg.Name)
+		}
+	}
+
+	if err = d.Build(cfg, gitLog, conn); err != nil {
+		return
+	}
+
+	if err = d.ZipFiles(cfg.ProjectPath, cfg.ZipFilePath, files, conn); err != nil {
+		return
+	}
+
+	_ = d.ScpUpload(cfg, strings.Join(fileNames, " "), "pm2 restart "+strings.Join(binNames, " "), conn)
+
+	return
+}
 
 func flush(msg string, conn *websocket.Conn) {
 	_ = conn.WriteMessage(websocket.TextMessage, []byte(msg))
 }
 
 // Git 拉取代码
-func (d *DeployService) Git(dirName, remoteURL, branch string, gitAuth *http.BasicAuth, conn *websocket.Conn) (log string, err error) {
+func (d *DeployService) Git(cfg config.Configure, branch string, conn *websocket.Conn) (log string, err error) {
 	flush("git 开始拉取... 🚀🚀🚀", conn)
 	defer func() {
+		_ = os.Chdir(dir)
 		if err != nil {
 			flush("git 错误 💔💔💔"+err.Error(), conn)
 		} else {
 			flush("git Success 👌👌👌", conn)
 		}
 	}()
-	if _, err := os.Stat(dirName); err != nil {
-		_ = os.Mkdir(dirName, 0755)
+	if _, err := os.Stat(cfg.ProjectPath); err != nil {
+		_ = os.Mkdir(cfg.ProjectPath, 0755)
 	}
 
-	var r *git.Repository
-	r, err = git.PlainOpen(dirName)
+	var (
+		r       *git.Repository
+		gitAuth = &http.BasicAuth{
+			Username: cfg.UserName,
+			Password: cfg.PassWord,
+		}
+	)
+	r, err = git.PlainOpen(cfg.ProjectPath)
 	if err != nil {
 		if !errors.Is(err, git.ErrRepositoryNotExists) {
 			return
 		} else {
 			w, _ := conn.NextWriter(websocket.TextMessage)
-			r, err = git.PlainClone(dirName, false, &git.CloneOptions{
-				URL:      remoteURL,
+			r, err = git.PlainClone(cfg.ProjectPath, false, &git.CloneOptions{
+				URL:      cfg.GitUrl,
 				Progress: io.MultiWriter(os.Stdout, w),
 				Auth:     gitAuth,
 			})
@@ -316,10 +357,11 @@ func (d *DeployService) Git(dirName, remoteURL, branch string, gitAuth *http.Bas
 }
 
 // Build 更新
-func (d *DeployService) Build(buildMaps map[string]string, binPath, gitLog string, conn *websocket.Conn) (err error) {
+func (d *DeployService) Build(cfg config.Configure, gitLog string, conn *websocket.Conn) (err error) {
 	flush("开始打包...🚀🚀🚀 ", conn)
 	var version string
 	defer func() {
+		_ = os.Chdir(dir)
 		if err != nil {
 			flush("打包错误 💔💔💔"+err.Error(), conn)
 		} else {
@@ -327,10 +369,10 @@ func (d *DeployService) Build(buildMaps map[string]string, binPath, gitLog strin
 		}
 	}()
 	// 存放bin的目录
-	_, err = os.Stat(binPath)
+	_, err = os.Stat(cfg.BinPath)
 	if !os.IsExist(err) {
 		// 目录不存在，则创建它
-		err = os.MkdirAll(binPath, fs.ModePerm)
+		err = os.MkdirAll(cfg.BinPath, fs.ModePerm)
 		if err != nil {
 			return err
 		}
@@ -342,13 +384,13 @@ func (d *DeployService) Build(buildMaps map[string]string, binPath, gitLog strin
 
 	// 版本信息
 	version = "v" + time.Now().Format("20060102150405")
-	ldflags := fmt.Sprintf(`-ldflags=-X main.version=%s -X "main.gitInfo=%s"`, version, gitLog)
+	ldflags := fmt.Sprintf(`-ldflags=-X main.version=%s -X "main.gitInfo=%s"`, version, strings.ReplaceAll(strings.ReplaceAll(gitLog, "\n", ";"), "\t", "-"))
 
-	for name, buildDir := range buildMaps {
-		if err = os.Chdir(buildDir); err != nil {
+	for _, build := range cfg.BuildConfigs {
+		if err = os.Chdir(build.ModPath); err != nil {
 			return err
 		}
-		flush("【"+name+"】 go mod tidy start...", conn)
+		flush("【"+build.Name+"】 go mod tidy start...", conn)
 		tidy, err := exec.Command("go", "mod", "tidy").CombinedOutput()
 		if err != nil {
 			return err
@@ -357,25 +399,27 @@ func (d *DeployService) Build(buildMaps map[string]string, binPath, gitLog strin
 			flush(string(tidy), conn)
 		}
 
-		flush("【"+name+"】go mod tidy finished...", conn)
+		flush("【"+build.Name+"】go mod tidy finished...", conn)
 
-		flush("go build 【"+name+"】 start... 🚀🚀🚀", conn)
-		build, err := exec.Command("go", "build", "-o", name, "-gcflags=all=-N -l", ldflags, "-trimpath").CombinedOutput()
-		if len(build) > 0 {
-			flush(string(build), conn)
+		flush("go build 【"+build.Name+"】 start... 🚀🚀🚀", conn)
+		buildOut, err := exec.Command("go", "build", "-o", dir+cfg.ProjectPath+"/"+build.BinName, "-gcflags=all=-N -l", ldflags, "-trimpath").CombinedOutput()
+		if len(buildOut) > 0 {
+			flush(string(buildOut), conn)
 		}
 		if err != nil {
 			return err
 		}
 
-		flush("go build 【"+name+"】 success... 👌👌👌", conn)
+		flush("go build 【"+build.Name+"】 success... 👌👌👌", conn)
+		os.Chdir(dir)
 	}
 
 	flush("go build all finished...👍👍👍", conn)
 	return
 }
 
-func (d *DeployService) ZipFiles(zipFilePath string, files []string, conn *websocket.Conn) (err error) {
+func (d *DeployService) ZipFiles(projectPath, zipFilePath string, files []string, conn *websocket.Conn) (err error) {
+	_ = os.Chdir(projectPath)
 	flush("开始删除压缩文件"+zipFilePath+"...🚀🚀🚀", conn)
 	// 删除压缩文件
 	if _, err = os.Stat(zipFilePath); err == nil {
@@ -386,6 +430,7 @@ func (d *DeployService) ZipFiles(zipFilePath string, files []string, conn *webso
 	flush("删除压缩文件成功"+zipFilePath+"...✔️✔️✔️", conn)
 
 	defer func() {
+		_ = os.Chdir(dir)
 		if err != nil {
 			flush("压缩 错误 💔💔💔"+err.Error(), conn)
 		} else {
@@ -405,6 +450,7 @@ func (d *DeployService) ZipFiles(zipFilePath string, files []string, conn *webso
 	defer zipWriter.Close()
 
 	for _, file := range files {
+		flush("开始压缩文件"+file+"...🚀🚀🚀", conn)
 		// 打开要压缩的文件
 		fileToZip, err := os.Open(file)
 		if err != nil {
@@ -438,14 +484,17 @@ func (d *DeployService) ZipFiles(zipFilePath string, files []string, conn *webso
 		if _, err := io.Copy(writer, fileToZip); err != nil {
 			return fmt.Errorf("写入文件 %s 到 ZIP 失败: %w", file, err)
 		}
+		flush("压缩文件"+file+"...👌👌👌", conn)
 	}
 
 	return nil
 }
 
-func (d *DeployService) ScpUpload(conf *ClientConfig, uploadZip, remoteClientPath, zipName, binName, restartCmd string, conn *websocket.Conn) (err error) {
+func (d *DeployService) ScpUpload(conf config.Configure, binName, restartCmd string, conn *websocket.Conn) (err error) {
+	_ = os.Chdir(conf.ProjectPath)
 	flush("开始远程服务器 "+conf.Host+" 执行...🚀🚀🚀 ", conn)
 	defer func() {
+		_ = os.Chdir(dir)
 		if err != nil {
 			flush("服务器执行失败 💔💔💔"+err.Error(), conn)
 		} else {
@@ -453,7 +502,7 @@ func (d *DeployService) ScpUpload(conf *ClientConfig, uploadZip, remoteClientPat
 		}
 	}()
 	// SSH 配置
-	config := &ssh.ClientConfig{
+	c := &ssh.ClientConfig{
 		User: conf.User,
 		Auth: []ssh.AuthMethod{
 			ssh.Password(conf.Password),
@@ -463,14 +512,14 @@ func (d *DeployService) ScpUpload(conf *ClientConfig, uploadZip, remoteClientPat
 
 	// 建立 SSH 连接
 	addr := fmt.Sprintf("%s:%s", conf.Host, conf.Port)
-	client, err := ssh.Dial("tcp", addr, config)
+	client, err := ssh.Dial("tcp", addr, c)
 	if err != nil {
 		return fmt.Errorf("无法连接到服务器: %w", err)
 	}
 	defer client.Close()
 
 	// 打开本地zip文件
-	localFile, err := os.Open(uploadZip)
+	localFile, err := os.Open(conf.ZipFilePath)
 	if err != nil {
 		return fmt.Errorf("无法打开本地文件: %w", err)
 	}
@@ -490,9 +539,11 @@ func (d *DeployService) ScpUpload(conf *ClientConfig, uploadZip, remoteClientPat
 	}
 
 	// 启动 SCP 命令来接收文件
-	if err := session.Start(fmt.Sprintf("scp -qt %s", remoteClientPath)); err != nil {
+	if err := session.Start(fmt.Sprintf("scp -qt %s", conf.ServerPath)); err != nil {
 		return fmt.Errorf("无法启动会话: %w", err)
 	}
+
+	flush("开始上传 "+conf.Host+" 🚀🚀🚀 ", conn)
 
 	// 文件传输前，必须要向远程服务器发送文件头信息，包括文件大小和权限
 	fileInfo, err := localFile.Stat()
@@ -507,14 +558,14 @@ func (d *DeployService) ScpUpload(conf *ClientConfig, uploadZip, remoteClientPat
 
 	bar := progressbar.NewOptions64(
 		fileSize,
-		progressbar.OptionSetDescription("文件上传中"),
-		progressbar.OptionSetWidth(40),
+		progressbar.OptionSetDescription(""),
+		progressbar.OptionSetWidth(10),
 		progressbar.OptionShowBytes(true),
 		progressbar.OptionSetWriter(writer),
 		progressbar.OptionSetTheme(progressbar.Theme{
-			Saucer:        "=",
-			SaucerHead:    ">",
-			SaucerPadding: "<p>",
+			Saucer:        "",
+			SaucerHead:    "",
+			SaucerPadding: "",
 			BarStart:      "",
 			BarEnd:        "",
 		}),
@@ -535,6 +586,8 @@ func (d *DeployService) ScpUpload(conf *ClientConfig, uploadZip, remoteClientPat
 	_, _ = fmt.Fprint(stdin, "\x00")
 	_ = stdin.Close()
 
+	flush("上传完成 "+conf.Host+" ✌️✌️✌️ ", conn)
+
 	// 等待会话结束
 	if err := session.Wait(); err != nil {
 		return fmt.Errorf("文件传输会话执行失败: %w", err)
@@ -550,7 +603,7 @@ func (d *DeployService) ScpUpload(conf *ClientConfig, uploadZip, remoteClientPat
 	}
 	defer unsession.Close()
 
-	uncmd := fmt.Sprintf("cd %s && unzip -o %s && chmod +x %s", remoteClientPath, zipName, binName)
+	uncmd := fmt.Sprintf("cd %s && unzip -o %s && chmod +x %s", conf.ServerPath, conf.ZipName, binName)
 	un, err := unsession.Output(uncmd)
 	if err != nil {
 		return fmt.Errorf("解压会话执行失败 ssh: command %v failed", err)

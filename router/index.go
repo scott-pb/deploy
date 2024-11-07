@@ -2,9 +2,9 @@ package router
 
 import (
 	"deploy/api"
+	"deploy/config"
 	"deploy/log"
 	"embed"
-	"fmt"
 	"github.com/gin-gonic/gin"
 	"io"
 	"net"
@@ -20,7 +20,10 @@ func InitRouter() {
 	gin.SetMode(gin.DebugMode)
 	r.Use(gin.Recovery())
 	ip := getLocalIp()
-	fmt.Println("ip:", ip)
+	if config.Config.Ip != "" {
+		ip = config.Config.Ip
+	}
+
 	r.GET("/webSocket", (&api.WebSocket{}).WebSocketHandler)
 	r.GET("/", func(c *gin.Context) {
 		c.Header("Content-Type", "text/html; charset=utf-8")

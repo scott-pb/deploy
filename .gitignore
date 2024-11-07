@@ -2,4 +2,4 @@ project
 go.sum
 *.log
 .idea
-./config/config.yaml
+/config/config.yaml
