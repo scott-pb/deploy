@@ -5,8 +5,10 @@ import (
 	"deploy/config"
 	"deploy/log"
 	"embed"
+	"fmt"
 	"github.com/gin-gonic/gin"
 	"io"
+	"math/rand"
 	"net"
 	"net/http"
 )
@@ -23,13 +25,65 @@ func InitRouter() {
 	if config.Config.Ip != "" {
 		ip = config.Config.Ip
 	}
+	r.Use(func(c *gin.Context) {
+		origin := c.Request.Header.Get("Origin")
+		c.Header("Access-Control-Allow-Origin", origin)
+		c.Header("Access-Control-Allow-Methods", "*")
+		c.Header("Access-Control-Allow-Headers", "*")
+		c.Header("Access-Control-Expose-Headers", "Content-Length, Access-Control-Allow-Origin, Access-Control-Allow-Headers,Cache-Control,Content-Language,Content-Type,Expires,Last-Modified,Pragma,FooBar,XMLHttpRequest,language,token") // 跨域关键设置 让浏览器可以解析
+		c.Header("Access-Control-Max-Age", "172800")                                                                                                                                                                                         // 缓存请求信息 单位为秒
+		c.Header("Access-Control-Allow-Credentials", "true")                                                                                                                                                                                 //  跨域请求是否需要带cookie信息 默认设置为true
+		c.Header("content-type", "application/json")                                                                                                                                                                                         // 设置返回格式是json
+		if c.Request.Method == http.MethodOptions {
+			c.AbortWithStatus(http.StatusNoContent)
+			return
+		}
+		c.Next()
+	})
 
+	r.POST("/login", login)
 	r.GET("/webSocket", (&api.WebSocket{}).WebSocketHandler)
 	r.GET("/", func(c *gin.Context) {
 		c.Header("Content-Type", "text/html; charset=utf-8")
 		c.String(http.StatusOK, "%s", html(ip))
 	})
 	_ = r.Run("0.0.0.0:8088")
+}
+
+func login(c *gin.Context) {
+	var (
+		isSuccess bool
+		account   config.Account
+	)
+
+	if err := c.ShouldBind(&account); err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"status":  http.StatusInternalServerError,
+			"message": err.Error(),
+		})
+		return
+	}
+	for _, acc := range config.Config.Accounts {
+		if acc.Username == account.Username && acc.Password == account.Password {
+			isSuccess = true
+			break
+		}
+	}
+
+	if !isSuccess {
+		c.JSON(http.StatusOK, gin.H{
+			"status":  http.StatusInternalServerError,
+			"message": "账号或密码不正确",
+		})
+		return
+	}
+	id := fmt.Sprintf("%d", 1000+rand.Intn(9000))
+	config.Config.Sessions[account.Username] = id
+	c.JSON(http.StatusOK, gin.H{
+		"status":  http.StatusOK,
+		"token":   account.Username + "-" + id,
+		"message": "登录成功",
+	})
 }
 
 func html(ip string) string {
@@ -162,6 +216,85 @@ func html(ip string) string {
             color: #495057;
         }
 
+        /* 模态对话框样式 */
+        .modal {
+            display: none; /* 默认隐藏 */
+            position: fixed;
+            z-index: 1001;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.4);
+        }
+
+        .modal-content {
+            background-color: white;
+            margin: 15% auto;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            max-width: 400px;
+
+            text-align: center;
+        }
+
+        .modal-content h2 {
+            margin-top: 0;
+            color: #333;
+        }
+
+        .modal-content .input-group {
+            margin-bottom: 15px;
+            text-align: left;
+        }
+
+        .modal-content .input-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+
+        .modal-content .input-group input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+
+        .modal-content button {
+            width: 100%;
+            padding: 10px;
+            border: none;
+            border-radius: 4px;
+            background-color: #5daf34;
+            color: white;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .modal-content button:hover {
+            background-color: #45a049;
+        }
+
+        .close {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 28px;
+            font-weight: bold;
+            color: #aaa;
+            cursor: pointer;
+        }
+
+        .close:hover,
+        .close:focus {
+            color: black;
+            text-decoration: none;
+        }
 
     </style>
 </head>
@@ -170,6 +303,7 @@ func html(ip string) string {
     <button class="connect" id="connect">连接</button>
     <button class="disconnect" id="disconnect">断开</button>
     <button class="disconnect" id="clear">清空</button>
+    <button class="disconnect" id="openLoginBtn">登录</button>
 
 </div>
 <div class="form-container">
@@ -198,8 +332,13 @@ func html(ip string) string {
                 <input name="branch" type="text" value="dev" class="custom-input"/>
             </div>
 
-            <div class="group custom-select" id="item-select">
+            <div class="group custom-select" id="item-select" style="display: flex;flex-wrap: wrap; ">
 
+            </div>
+            <div class="group">
+                <label>重启:</label>
+                <label><input type="radio" name="restart" value="true" checked> true </label>
+                <label><input type="radio" name="restart" value="false"> false </label>
             </div>
 
             <!-- 提交按钮 -->
@@ -209,6 +348,25 @@ func html(ip string) string {
         </form>
     </div>
     <div id="messages"></div>
+
+    <!-- 模态对话框 -->
+    <div id="loginModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>登录</h2>
+            <form id="loginForm">
+                <div class="input-group">
+                    <label for="username">Username:</label>
+                    <input type="text" id="username" name="username" required>
+                </div>
+                <div class="input-group">
+                    <label for="password">Password:</label>
+                    <input type="password" id="password" name="password" required>
+                </div>
+                <button type="submit">登录</button>
+            </form>
+        </div>
+    </div>
 </div>
 
 
@@ -242,17 +400,28 @@ func html(ip string) string {
             return;
         }
 
-        ws = new WebSocket('ws://` + ip + `:8088/webSocket');
+        let token = localStorage.getItem("token");
+        if (token === "" || token == null) {
+            alert("请先登录")
+            return;
+        }
+
+        ws = new WebSocket('ws://` + ip + `:8088/webSocket?' + token);
 
         ws.onopen = function () {
             document.getElementById('status').innerHTML = '<span style="color: #5daf34;font-weight: bold;">状态：连接成功</span>';
+ 			document.getElementById('messages').innerHTML = '';
             startHeartbeat(); // 开始发送心跳
             sendHeartbeat(); // 连接成功后立即发送一次心跳
         };
 
         ws.onmessage = function (event) {
             if (event.data === "pong") {
-                console.log(event.data)
+                return
+            }
+            if (event.data === "no login") {
+                document.getElementById('messages').innerHTML = '<span style="color: red;font-weight: bold; margin: 10% auto">请先登录!</span>';
+                ws.close(3008, "noLogin")
                 return
             }
             document.getElementById('messages').innerHTML += event.data + '<br>';
@@ -263,11 +432,18 @@ func html(ip string) string {
             alert('WebSocket 连接错误');
         };
 
-        ws.onclose = function () {
-            document.getElementById('status').innerHTML = '<span style="color: red;font-weight: bold;">状态：连接关闭</span>';
-            ws = null;
+        ws.onclose = function (event) {
+            console.log(event.code);
+            let msg = '';
+            if (event.code === 3008) {
+                msg = '请先登录';
+            } else {
+                msg = '连接关闭';
+            }
+            document.getElementById('status').innerHTML = '<span style="color: red;font-weight: bold;">状态：' + msg + '</span>';
+            ws = null
             stopHeartbeat();
-            alert("连接关闭")
+            alert(msg);
         };
     });
 
@@ -285,6 +461,14 @@ func html(ip string) string {
 
     document.getElementById('onsubmit').addEventListener('click', function () {
         if (ws && ws.readyState === WebSocket.OPEN) {
+			document.getElementById('messages').innerHTML = '';
+            if (document.querySelector('input[name="env"]:checked').value === "release") {
+                let userChoice = confirm("你确定要继续吗？");
+                if (!userChoice) {
+                    return
+                }
+            }
+
             const form = document.getElementById('form');
             const formData = {};
             for (const element of form.elements) {
@@ -321,11 +505,15 @@ func html(ip string) string {
         let items = [];
         switch (this.value) {
             case "enterprise":
-                items = ["api-chat", "api-chatroom", "rpc-chat", "rpc-game", "cron"];
-                document.getElementById('item-select').innerHTML = '<label>工程:</label><label><input type="checkbox" name="items" checked value="all">all</label>';
+                items = ["soga_api_chat", "soga_api_chatroom", "soga_rpc_chat", "soga_rpc_game", "soga_cron", "soga_tool"];
+                document.getElementById('item-select').innerHTML = '<label>工程:</label>';
                 break
             case "server":
-                document.getElementById('item-select').innerHTML = '<label>工程:</label><label><input type="checkbox" name="items" checked value="all">all</label>';
+                items = ["soga_im_api", "soga_im_msg_gateway", "soga_im_msg_transfer", "soga_im_push",
+                    "soga_im_rpc_auth", "soga_im_rpc_cache", "soga_im_rpc_conversation", "soga_im_rpc_friend",
+                    "soga_im_rpc_group", "soga_im_rpc_msg", "soga_im_rpc_office", "soga_im_rpc_organization",
+                    "soga_im_rpc_user"];
+                document.getElementById('item-select').innerHTML = '<label>工程:</label>';
                 break
             default:
                 document.getElementById('item-select').innerHTML = '';
@@ -333,7 +521,48 @@ func html(ip string) string {
         for (let i = 0; i < items.length; i++) {
             document.getElementById('item-select').innerHTML += '<label><input type="checkbox" name="items" value="' + items[i] + '">' + items[i] + '</label>'
         }
-    })
+    });
+
+    // 弹出登录框
+    document.getElementById('openLoginBtn').addEventListener('click', function () {
+        document.getElementById('loginModal').style.display = 'block';
+    });
+
+    document.querySelector('.close').addEventListener('click', function () {
+        document.getElementById('loginModal').style.display = 'none';
+    });
+
+    window.onclick = function (event) {
+        let modal = document.getElementById('loginModal');
+        if (event.target === modal) {
+            modal.style.display = 'none';
+        }
+    };
+
+    document.getElementById('loginForm').addEventListener('submit', function (event) {
+        event.preventDefault(); // 阻止表单默认提交行为
+        let data = JSON.stringify({
+            username: document.getElementById('username').value,
+            password: document.getElementById('password').value,
+        });
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', "http://` + ip + `:8088/" + "login", true);
+        xhr.setRequestHeader("content-type", "application/json;charset=UTF-8");
+        xhr.onreadystatechange = function () {
+            if (xhr.readyState === XMLHttpRequest.DONE && xhr.status === 200) {
+                let result = JSON.parse(xhr.response);
+                if (result.status === 200) {
+                    localStorage.setItem("token", result.token);
+                    document.getElementById('loginModal').style.display = 'none';
+                }
+                alert(result.message);
+            }
+        };
+        xhr.send(data)
+
+
+    });
 
 </script>
 </body>

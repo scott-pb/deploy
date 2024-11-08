@@ -16,7 +16,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
 	"strings"
 	"time"
 )
@@ -39,16 +38,17 @@ type Message struct {
 	Env     string   `json:"env"`
 	Project string   `json:"project"`
 	Branch  string   `json:"branch"`
+	Restart bool     `json:"restart"`
 	Items   []string `json:"items"`
 }
 
-func (d *DeployService) AdminTest(conn *websocket.Conn, branch string) {
+func (d *DeployService) AdminTest(conn *websocket.Conn, msg Message) {
 	adminConf := config.Config.AdminTest
 	err := os.Chdir(dir)
 	if err != nil {
 		flush("Chdir err"+err.Error(), conn)
 	}
-	gitLog, err := d.Git(adminConf, branch, conn)
+	gitLog, err := d.Git(adminConf, msg.Branch, conn)
 	if err != nil {
 		return
 	}
@@ -61,17 +61,17 @@ func (d *DeployService) AdminTest(conn *websocket.Conn, branch string) {
 		return
 	}
 
-	_ = d.ScpUpload(adminConf, adminConf.BuildConfigs[0].Name, "pm2 restart soga_admin", conn)
+	_ = d.ScpUpload(adminConf, adminConf.BuildConfigs[0].Name, "pm2 restart soga_admin", msg.Restart, conn)
 	return
 }
 
-func (d *DeployService) AdminRelease(conn *websocket.Conn, branch string) {
+func (d *DeployService) AdminRelease(conn *websocket.Conn, msg Message) {
 	adminConf := config.Config.AdminRelease
 	if err := os.Chdir(dir); err != nil {
 		flush("Chdir err"+err.Error(), conn)
 	}
 
-	gitLog, err := d.Git(adminConf, branch, conn)
+	gitLog, err := d.Git(adminConf, msg.Branch, conn)
 	if err != nil {
 		return
 	}
@@ -84,7 +84,7 @@ func (d *DeployService) AdminRelease(conn *websocket.Conn, branch string) {
 		return
 	}
 
-	_ = d.ScpUpload(adminConf, adminConf.BuildConfigs[0].Name, "supervisorctl restart soga_admin", conn)
+	_ = d.ScpUpload(adminConf, adminConf.BuildConfigs[0].Name, "supervisorctl restart soga_admin", msg.Restart, conn)
 	return
 }
 
@@ -109,6 +109,10 @@ func (d *DeployService) EnterpriseTest(conn *websocket.Conn, msg Message) {
 		}
 	}
 	cfg.BuildConfigs = newBuildConfig
+	if len(cfg.BuildConfigs) == 0 {
+		flush("没有可打包的💔💔💔", conn)
+		return
+	}
 
 	for _, bcfg := range cfg.BuildConfigs {
 		files = append(files, bcfg.BinName)
@@ -126,18 +130,64 @@ func (d *DeployService) EnterpriseTest(conn *websocket.Conn, msg Message) {
 		return
 	}
 
-	_ = d.ScpUpload(cfg, strings.Join(fileNames, " "), "pm2 restart "+strings.Join(binNames, " "), conn)
+	_ = d.ScpUpload(cfg, strings.Join(fileNames, " "), "pm2 restart "+strings.Join(binNames, " "), msg.Restart, conn)
+
+	return
+}
+
+func (d *DeployService) EnterpriseRelease(conn *websocket.Conn, msg Message) {
+	cfg := config.Config.EnterpriseTest
+
+	gitLog, err := d.Git(cfg, msg.Branch, conn)
+	if err != nil {
+		return
+	}
+
+	files := make([]string, 0)
+	fileNames := make([]string, 0)
+	binNames := make([]string, 0)
+
+	newBuildConfig := make([]config.BuildConfig, 0)
+	for _, item := range msg.Items {
+		for _, bcfg := range cfg.BuildConfigs {
+			if item == bcfg.Env {
+				newBuildConfig = append(newBuildConfig, bcfg)
+			}
+		}
+	}
+	cfg.BuildConfigs = newBuildConfig
+	if len(cfg.BuildConfigs) == 0 {
+		flush("没有可打包的💔💔💔", conn)
+		return
+	}
+
+	restartCmd := ""
+	for _, bcfg := range cfg.BuildConfigs {
+		files = append(files, bcfg.BinName)
+		fileNames = append(fileNames, bcfg.Name)
+		if bcfg.Name != "soga_tool" {
+			binNames = append(binNames, bcfg.Name)
+		}
+		if bcfg.Name == "soga_cron" {
+			restartCmd = "mv /root/soga_im_enterprise/bin/soga_cron /root/soga_im_cron/ && mv /root/soga_im_cron/soga_cron /root/soga_im_cron/soga_im_cron && "
+		}
+	}
+
+	if err = d.Build(cfg, gitLog, conn); err != nil {
+		return
+	}
+
+	if err = d.ZipFiles(cfg.ProjectPath, cfg.ZipFilePath, files, conn); err != nil {
+		return
+	}
+
+	_ = d.ScpUpload(cfg, strings.Join(fileNames, " "), restartCmd+"pm2 restart "+strings.Join(binNames, " "), msg.Restart, conn)
 
 	return
 }
 
 func (d *DeployService) ServerTest(conn *websocket.Conn, msg Message) {
 	cfg := config.Config.ServerTest
-
-	gitLog, err := d.Git(cfg, msg.Branch, conn)
-	if err != nil {
-		return
-	}
 
 	files := make([]string, 0)
 	fileNames := make([]string, 0)
@@ -157,48 +207,58 @@ func (d *DeployService) ServerTest(conn *websocket.Conn, msg Message) {
 		fileNames = append(fileNames, bcfg.Name)
 	}
 
-	if err = d.Build(cfg, gitLog, conn); err != nil {
+	if len(cfg.BuildConfigs) == 0 {
+		flush("没有可打包的💔💔💔", conn)
 		return
 	}
-
-	if err = d.ZipFiles(cfg.ProjectPath, cfg.ZipFilePath, files, conn); err != nil {
-		return
-	}
-
-	_ = d.ScpUpload(cfg, strings.Join(fileNames, " "), "pm2 restart "+strings.Join(fileNames, " "), conn)
-
-	return
-}
-
-func (d *DeployService) EnterpriseRelease(conn *websocket.Conn, msg Message) {
-	cfg := config.Config.EnterpriseTest
 
 	gitLog, err := d.Git(cfg, msg.Branch, conn)
 	if err != nil {
 		return
 	}
 
+	if err = d.Build(cfg, gitLog, conn); err != nil {
+		return
+	}
+
+	if err = d.ZipFiles(cfg.ProjectPath, cfg.ZipFilePath, files, conn); err != nil {
+		return
+	}
+
+	_ = d.ScpUpload(cfg, strings.Join(fileNames, " "), "pm2 restart "+strings.Join(fileNames, " "), msg.Restart, conn)
+
+	return
+}
+
+func (d *DeployService) ServerRelease(conn *websocket.Conn, msg Message) {
+	cfg := config.Config.ServerRelease
+
 	files := make([]string, 0)
 	fileNames := make([]string, 0)
-	binNames := make([]string, 0)
-	if !slices.Contains(msg.Items, "all") {
-		newBuildConfig := make([]config.BuildConfig, 0)
-		for _, item := range msg.Items {
-			for _, bcfg := range cfg.BuildConfigs {
-				if item == bcfg.Env {
-					newBuildConfig = append(newBuildConfig, bcfg)
-				}
+
+	newBuildConfig := make([]config.BuildConfig, 0)
+	for _, item := range msg.Items {
+		for _, bcfg := range cfg.BuildConfigs {
+			if item == bcfg.Env {
+				newBuildConfig = append(newBuildConfig, bcfg)
 			}
 		}
-		cfg.BuildConfigs = newBuildConfig
 	}
+	cfg.BuildConfigs = newBuildConfig
 
 	for _, bcfg := range cfg.BuildConfigs {
 		files = append(files, bcfg.BinName)
 		fileNames = append(fileNames, bcfg.Name)
-		if bcfg.Name != "soga_tool" {
-			binNames = append(binNames, bcfg.Name)
-		}
+	}
+
+	if len(cfg.BuildConfigs) == 0 {
+		flush("没有可打包的💔💔💔", conn)
+		return
+	}
+
+	gitLog, err := d.Git(cfg, msg.Branch, conn)
+	if err != nil {
+		return
 	}
 
 	if err = d.Build(cfg, gitLog, conn); err != nil {
@@ -209,7 +269,7 @@ func (d *DeployService) EnterpriseRelease(conn *websocket.Conn, msg Message) {
 		return
 	}
 
-	_ = d.ScpUpload(cfg, strings.Join(fileNames, " "), "pm2 restart "+strings.Join(binNames, " "), conn)
+	_ = d.ScpUpload(cfg, strings.Join(fileNames, " "), "supervisorctl restart "+strings.Join(fileNames, " "), msg.Restart, conn)
 
 	return
 }
@@ -411,7 +471,7 @@ func (d *DeployService) Build(cfg config.Configure, gitLog string, conn *websock
 		}
 
 		flush("go build 【"+build.Name+"】 success... 👌👌👌", conn)
-		os.Chdir(dir)
+		_ = os.Chdir(dir)
 	}
 
 	flush("go build all finished...👍👍👍", conn)
@@ -490,7 +550,7 @@ func (d *DeployService) ZipFiles(projectPath, zipFilePath string, files []string
 	return nil
 }
 
-func (d *DeployService) ScpUpload(conf config.Configure, binName, restartCmd string, conn *websocket.Conn) (err error) {
+func (d *DeployService) ScpUpload(conf config.Configure, binName, restartCmd string, restart bool, conn *websocket.Conn) (err error) {
 	_ = os.Chdir(conf.ProjectPath)
 	flush("开始远程服务器 "+conf.Host+" 执行...🚀🚀🚀 ", conn)
 	defer func() {
@@ -611,19 +671,23 @@ func (d *DeployService) ScpUpload(conf config.Configure, binName, restartCmd str
 	flush(string(un), conn)
 	flush("服务器解压成功...✔️✔️✔️", conn)
 
-	// 重启
-	flush("服务器开始重启...🚀🚀🚀", conn)
-	resession, err := client.NewSession()
-	if err != nil {
-		return fmt.Errorf("无法创建 SSH 会话: %w", err)
-	}
-	defer resession.Close()
+	// 需要重启
+	if restart {
+		// 重启
+		flush("服务器开始重启...🚀🚀🚀", conn)
+		resession, err := client.NewSession()
+		if err != nil {
+			return fmt.Errorf("无法创建 SSH 会话: %w", err)
+		}
+		defer resession.Close()
 
-	re, err := resession.Output(restartCmd)
-	if err != nil {
-		return fmt.Errorf("重启会话执行失败 ssh: command %v failed", err)
+		re, err := resession.Output(restartCmd)
+		if err != nil {
+			return fmt.Errorf("重启会话执行失败 ssh: command %v failed", err)
+		}
+		flush(string(re), conn)
+		flush("服务器重启成功...✔️✔️✔️", conn)
 	}
-	flush(string(re), conn)
-	flush("服务器重启成功...✔️✔️✔️", conn)
+
 	return nil
 }

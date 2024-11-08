@@ -10,10 +10,13 @@ var Config config
 type config struct {
 	Ip                string    `json:"ip" yaml:"ip"`
 	AdminTest         Configure `json:"admin_test" yaml:"admin_test"`
-	EnterpriseTest    Configure `json:"im_enterprise_test" yaml:"im_enterprise_test"`
-	ServerTest        Configure `json:"im_server_test" yaml:"im_server_test"`
 	AdminRelease      Configure `json:"admin_release" yaml:"admin_release"`
+	EnterpriseTest    Configure `json:"im_enterprise_test" yaml:"im_enterprise_test"`
 	EnterpriseRelease Configure `json:"im_enterprise_release" yaml:"im_enterprise_release"`
+	ServerTest        Configure `json:"im_server_test" yaml:"im_server_test"`
+	ServerRelease     Configure `json:"im_server_release" yaml:"im_server_release"`
+	Accounts          []Account `json:"accounts" yaml:"accounts"`
+	Sessions          map[string]string
 }
 
 type Configure struct {
@@ -24,6 +27,11 @@ type Configure struct {
 	ZipFilePath   string        `json:"zip_file_path" yaml:"zip_file_path"`
 	ZipName       string        `json:"zip_name" yaml:"zip_name"`
 	ServerPath    string        `json:"server_path" yaml:"server_path"`
+}
+
+type Account struct {
+	Username string `json:"username"yaml:"username"`
+	Password string `json:"password" yaml:"password"`
 }
 
 type BuildConfig struct {
@@ -59,4 +67,5 @@ func Init(name string) {
 	if err = yaml.Unmarshal(file, &Config); err != nil {
 		panic(err)
 	}
+	Config.Sessions = make(map[string]string)
 }

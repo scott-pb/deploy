@@ -127,6 +127,85 @@
             color: #495057;
         }
 
+        /* 模态对话框样式 */
+        .modal {
+            display: none; /* 默认隐藏 */
+            position: fixed;
+            z-index: 1001;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.4);
+        }
+
+        .modal-content {
+            background-color: white;
+            margin: 15% auto;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            max-width: 400px;
+
+            text-align: center;
+        }
+
+        .modal-content h2 {
+            margin-top: 0;
+            color: #333;
+        }
+
+        .modal-content .input-group {
+            margin-bottom: 15px;
+            text-align: left;
+        }
+
+        .modal-content .input-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+
+        .modal-content .input-group input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+
+        .modal-content button {
+            width: 100%;
+            padding: 10px;
+            border: none;
+            border-radius: 4px;
+            background-color: #5daf34;
+            color: white;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .modal-content button:hover {
+            background-color: #45a049;
+        }
+
+        .close {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 28px;
+            font-weight: bold;
+            color: #aaa;
+            cursor: pointer;
+        }
+
+        .close:hover,
+        .close:focus {
+            color: black;
+            text-decoration: none;
+        }
 
     </style>
 </head>
@@ -135,6 +214,7 @@
     <button class="connect" id="connect">连接</button>
     <button class="disconnect" id="disconnect">断开</button>
     <button class="disconnect" id="clear">清空</button>
+    <button class="disconnect" id="openLoginBtn">登录</button>
 
 </div>
 <div class="form-container">
@@ -166,6 +246,11 @@
             <div class="group custom-select" id="item-select" style="display: flex;flex-wrap: wrap; ">
 
             </div>
+            <div class="group">
+                <label>重启:</label>
+                <label><input type="radio" name="restart" value="true" checked> true </label>
+                <label><input type="radio" name="restart" value="false"> false </label>
+            </div>
 
             <!-- 提交按钮 -->
             <p>
@@ -174,6 +259,25 @@
         </form>
     </div>
     <div id="messages"></div>
+
+    <!-- 模态对话框 -->
+    <div id="loginModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>登录</h2>
+            <form id="loginForm">
+                <div class="input-group">
+                    <label for="username">Username:</label>
+                    <input type="text" id="username" name="username" required>
+                </div>
+                <div class="input-group">
+                    <label for="password">Password:</label>
+                    <input type="password" id="password" name="password" required>
+                </div>
+                <button type="submit">登录</button>
+            </form>
+        </div>
+    </div>
 </div>
 
 
@@ -207,10 +311,17 @@
             return;
         }
 
-        ws = new WebSocket('ws://192.168.0.99:8088/webSocket');
+        let token = localStorage.getItem("token");
+        if (token === "" || token == null) {
+            alert("请先登录")
+            return;
+        }
+
+        ws = new WebSocket('ws://192.168.0.99:8088/webSocket?' + token);
 
         ws.onopen = function () {
             document.getElementById('status').innerHTML = '<span style="color: #5daf34;font-weight: bold;">状态：连接成功</span>';
+            document.getElementById('messages').innerHTML = '';
             startHeartbeat(); // 开始发送心跳
             sendHeartbeat(); // 连接成功后立即发送一次心跳
         };
@@ -219,9 +330,9 @@
             if (event.data === "pong") {
                 return
             }
-
-            if (event.data.indexOf("文件上传中") !== -1) {
-                document.getElementById('messages').innerHTML += event.data + '<br>';
+            if (event.data === "no login") {
+                document.getElementById('messages').innerHTML = '<span style="color: red;font-weight: bold; margin: 10% auto">请先登录!</span>';
+                ws.close(3008, "noLogin")
                 return
             }
             document.getElementById('messages').innerHTML += event.data + '<br>';
@@ -232,11 +343,18 @@
             alert('WebSocket 连接错误');
         };
 
-        ws.onclose = function () {
-            document.getElementById('status').innerHTML = '<span style="color: red;font-weight: bold;">状态：连接关闭</span>';
-            ws = null;
+        ws.onclose = function (event) {
+            console.log(event.code);
+            let msg = '';
+            if (event.code === 3008) {
+                msg = '请先登录';
+            } else {
+                msg = '连接关闭';
+            }
+            document.getElementById('status').innerHTML = '<span style="color: red;font-weight: bold;">状态：' + msg + '</span>';
+            ws = null
             stopHeartbeat();
-            alert("连接关闭")
+            alert(msg);
         };
     });
 
@@ -254,6 +372,7 @@
 
     document.getElementById('onsubmit').addEventListener('click', function () {
         if (ws && ws.readyState === WebSocket.OPEN) {
+            document.getElementById('messages').innerHTML = '';
             if (document.querySelector('input[name="env"]:checked').value === "release") {
                 let userChoice = confirm("你确定要继续吗？");
                 if (!userChoice) {
@@ -313,7 +432,48 @@
         for (let i = 0; i < items.length; i++) {
             document.getElementById('item-select').innerHTML += '<label><input type="checkbox" name="items" value="' + items[i] + '">' + items[i] + '</label>'
         }
-    })
+    });
+
+    // 弹出登录框
+    document.getElementById('openLoginBtn').addEventListener('click', function () {
+        document.getElementById('loginModal').style.display = 'block';
+    });
+
+    document.querySelector('.close').addEventListener('click', function () {
+        document.getElementById('loginModal').style.display = 'none';
+    });
+
+    window.onclick = function (event) {
+        let modal = document.getElementById('loginModal');
+        if (event.target === modal) {
+            modal.style.display = 'none';
+        }
+    };
+
+    document.getElementById('loginForm').addEventListener('submit', function (event) {
+        event.preventDefault(); // 阻止表单默认提交行为
+        let data = JSON.stringify({
+            username: document.getElementById('username').value,
+            password: document.getElementById('password').value,
+        });
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', "http://192.168.0.99:8088/" + "login", true);
+        xhr.setRequestHeader("content-type", "application/json;charset=UTF-8");
+        xhr.onreadystatechange = function () {
+            if (xhr.readyState === XMLHttpRequest.DONE && xhr.status === 200) {
+                let result = JSON.parse(xhr.response);
+                if (result.status === 200) {
+                    localStorage.setItem("token", result.token);
+                    document.getElementById('loginModal').style.display = 'none';
+                }
+                alert(result.message);
+            }
+        };
+        xhr.send(data)
+
+
+    });
 
 </script>
 </body>

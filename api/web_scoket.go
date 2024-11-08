@@ -1,6 +1,7 @@
 package api
 
 import (
+	"deploy/config"
 	"deploy/constant"
 	"deploy/internal"
 	"deploy/log"
@@ -9,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
@@ -28,6 +30,15 @@ func (w *WebSocket) WebSocketHandler(c *gin.Context) {
 		WriteBufferSize:   1024,
 		EnableCompression: true,
 	}
+	var isLogin bool
+	token := c.Request.URL.RawQuery
+	if token != "" {
+		s := strings.Split(token, "-")
+		if len(s) == 2 && s[1] == config.Config.Sessions[s[0]] {
+			isLogin = true
+		}
+	}
+
 	// 获取WebSocket连接
 	ws, err := upgrade.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
@@ -46,33 +57,41 @@ func (w *WebSocket) WebSocketHandler(c *gin.Context) {
 		if err != nil {
 			break
 		}
+		if !isLogin {
+			_ = ws.WriteMessage(websocket.TextMessage, []byte("no login"))
+			continue
+		}
 
 		if string(p) == "ping" {
 			_ = ws.WriteMessage(websocket.TextMessage, []byte("pong"))
+			continue
 		}
 		mu.Lock()
+
 		var message internal.Message
 		_ = json.Unmarshal(p, &message)
-
+		log.Info(clientIP, fmt.Sprintf("%+v", message))
 		switch message.Project {
 		case constant.Admin:
 			switch message.Env {
 			case constant.Test:
-				s.AdminTest(ws, message.Branch)
+				s.AdminTest(ws, message)
 			case constant.Release:
-				s.AdminRelease(ws, message.Branch)
+				s.AdminRelease(ws, message)
 			}
 		case constant.Enterprise:
 			switch message.Env {
 			case constant.Test:
 				s.EnterpriseTest(ws, message)
 			case constant.Release:
+				s.EnterpriseRelease(ws, message)
 			}
 		case constant.Server:
 			switch message.Env {
 			case constant.Test:
 				s.ServerTest(ws, message)
 			case constant.Release:
+				s.ServerRelease(ws, message)
 			}
 		}
 		mu.Unlock()
