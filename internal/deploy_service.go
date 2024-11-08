@@ -3,6 +3,7 @@ package internal
 import (
 	"archive/zip"
 	"deploy/config"
+	dlog "deploy/log"
 	"errors"
 	"fmt"
 	"github.com/go-git/go-git/v5"
@@ -285,7 +286,9 @@ func (d *DeployService) Git(cfg config.Configure, branch string, conn *websocket
 		_ = os.Chdir(dir)
 		if err != nil {
 			flush("git 错误 💔💔💔"+err.Error(), conn)
+			dlog.Error(err)
 		} else {
+			dlog.Info("git Success 👌👌👌")
 			flush("git Success 👌👌👌", conn)
 		}
 	}()
@@ -423,8 +426,10 @@ func (d *DeployService) Build(cfg config.Configure, gitLog string, conn *websock
 	defer func() {
 		_ = os.Chdir(dir)
 		if err != nil {
+			dlog.Error(err)
 			flush("打包错误 💔💔💔"+err.Error(), conn)
 		} else {
+			dlog.Info("打包版本【" + version + "】 Success 💯💯💯")
 			flush("打包版本【"+version+"】 Success 💯💯💯", conn)
 		}
 	}()
@@ -492,8 +497,10 @@ func (d *DeployService) ZipFiles(projectPath, zipFilePath string, files []string
 	defer func() {
 		_ = os.Chdir(dir)
 		if err != nil {
+			dlog.Error(err)
 			flush("压缩 错误 💔💔💔"+err.Error(), conn)
 		} else {
+			dlog.Info("压缩 Success 👌👌👌")
 			flush("压缩 Success 👌👌👌", conn)
 		}
 	}()
@@ -556,8 +563,10 @@ func (d *DeployService) ScpUpload(conf config.Configure, binName, restartCmd str
 	defer func() {
 		_ = os.Chdir(dir)
 		if err != nil {
+			dlog.Error(err)
 			flush("服务器执行失败 💔💔💔"+err.Error(), conn)
 		} else {
+			dlog.Info("服务器执行 Success 💯💯💯")
 			flush("服务器执行 Success 💯💯💯", conn)
 		}
 	}()

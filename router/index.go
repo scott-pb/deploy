@@ -45,9 +45,9 @@ func InitRouter() {
 	r.GET("/webSocket", (&api.WebSocket{}).WebSocketHandler)
 	r.GET("/", func(c *gin.Context) {
 		c.Header("Content-Type", "text/html; charset=utf-8")
-		c.String(http.StatusOK, "%s", html(ip))
+		c.String(http.StatusOK, "%s", html(ip+":"+config.Config.Port))
 	})
-	_ = r.Run("0.0.0.0:8088")
+	_ = r.Run("0.0.0.0:" + config.Config.Port)
 }
 
 func login(c *gin.Context) {
@@ -86,13 +86,13 @@ func login(c *gin.Context) {
 	})
 }
 
-func html(ip string) string {
+func html(url string) string {
 	return `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebSocket 实时通信示例</title>
+    <title>soga 发布系统 </title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -406,7 +406,7 @@ func html(ip string) string {
             return;
         }
 
-        ws = new WebSocket('ws://` + ip + `:8088/webSocket?' + token);
+        ws = new WebSocket('ws://` + url + `/webSocket?' + token);
 
         ws.onopen = function () {
             document.getElementById('status').innerHTML = '<span style="color: #5daf34;font-weight: bold;">状态：连接成功</span>';
@@ -547,7 +547,7 @@ func html(ip string) string {
         });
 
         const xhr = new XMLHttpRequest();
-        xhr.open('POST', "http://` + ip + `:8088/" + "login", true);
+        xhr.open('POST', "http://` + url + `/" + "login", true);
         xhr.setRequestHeader("content-type", "application/json;charset=UTF-8");
         xhr.onreadystatechange = function () {
             if (xhr.readyState === XMLHttpRequest.DONE && xhr.status === 200) {

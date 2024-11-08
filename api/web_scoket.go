@@ -30,12 +30,16 @@ func (w *WebSocket) WebSocketHandler(c *gin.Context) {
 		WriteBufferSize:   1024,
 		EnableCompression: true,
 	}
-	var isLogin bool
+	var (
+		isLogin  bool
+		username string
+	)
 	token := c.Request.URL.RawQuery
 	if token != "" {
 		s := strings.Split(token, "-")
 		if len(s) == 2 && s[1] == config.Config.Sessions[s[0]] {
 			isLogin = true
+			username = s[0]
 		}
 	}
 
@@ -70,7 +74,7 @@ func (w *WebSocket) WebSocketHandler(c *gin.Context) {
 
 		var message internal.Message
 		_ = json.Unmarshal(p, &message)
-		log.Info(clientIP, fmt.Sprintf("%+v", message))
+		log.Info(clientIP, username, fmt.Sprintf("%+v", message))
 		switch message.Project {
 		case constant.Admin:
 			switch message.Env {

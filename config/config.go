@@ -9,6 +9,7 @@ var Config config
 
 type config struct {
 	Ip                string    `json:"ip" yaml:"ip"`
+	Port              string    `json:"port" yaml:"port"`
 	AdminTest         Configure `json:"admin_test" yaml:"admin_test"`
 	AdminRelease      Configure `json:"admin_release" yaml:"admin_release"`
 	EnterpriseTest    Configure `json:"im_enterprise_test" yaml:"im_enterprise_test"`
