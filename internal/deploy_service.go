@@ -17,6 +17,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"time"
 )
@@ -279,6 +280,36 @@ func flush(msg string, conn *websocket.Conn) {
 	_ = conn.WriteMessage(websocket.TextMessage, []byte(msg))
 }
 
+func (d *DeployService) gitPull(worktree *git.Worktree, auth *http.BasicAuth, try int) (err error) {
+	err = worktree.Pull(&git.PullOptions{
+		Auth:  auth,
+		Force: true,
+	})
+	if err != nil && !errors.Is(err, git.NoErrAlreadyUpToDate) {
+		if try > 3 {
+			return err
+		}
+		return d.gitPull(worktree, auth, try+1)
+	}
+	return nil
+}
+
+func (d *DeployService) gitCheckout(wo *git.Worktree, branch string, try int) (err error) {
+	err = wo.Checkout(&git.CheckoutOptions{
+		Force:  true,
+		Branch: plumbing.NewRemoteReferenceName(git.DefaultRemoteName, branch),
+	})
+
+	if errors.Is(err, git.ErrUnstagedChanges) {
+		if try > 3 {
+			return err
+		}
+		return d.gitCheckout(wo, branch, try+1)
+	} else {
+		return
+	}
+}
+
 // Git 拉取代码
 func (d *DeployService) Git(cfg config.Configure, branch string, conn *websocket.Conn) (log string, err error) {
 	flush("git 开始拉取... 🚀🚀🚀", conn)
@@ -286,7 +317,7 @@ func (d *DeployService) Git(cfg config.Configure, branch string, conn *websocket
 		_ = os.Chdir(dir)
 		if err != nil {
 			flush("git 错误 💔💔💔"+err.Error(), conn)
-			dlog.Error(err)
+			dlog.Error(err, string(debug.Stack()))
 		} else {
 			dlog.Info("git Success 👌👌👌")
 			flush("git Success 👌👌👌", conn)
@@ -325,25 +356,13 @@ func (d *DeployService) Git(cfg config.Configure, branch string, conn *websocket
 		return
 	}
 
-	if err = wo.Checkout(&git.CheckoutOptions{
-		Force:  true,
-		Branch: plumbing.NewRemoteReferenceName(git.DefaultRemoteName, branch),
-	}); err != nil {
+	// Checkout
+	if err = d.gitCheckout(wo, branch, 1); err != nil {
 		return
 	}
 
-	err = wo.Pull(&git.PullOptions{
-		Auth:  gitAuth,
-		Force: true,
-	})
-	if err != nil && !errors.Is(err, git.NoErrAlreadyUpToDate) {
-		return
-	}
-	err = wo.Checkout(&git.CheckoutOptions{
-		Branch: plumbing.NewRemoteReferenceName(git.DefaultRemoteName, branch),
-		Force:  true,
-	})
-	if err != nil && !errors.Is(err, git.ErrUnstagedChanges) {
+	// Pull
+	if err = d.gitPull(wo, gitAuth, 1); err != nil {
 		return
 	}
 
@@ -367,26 +386,14 @@ func (d *DeployService) Git(cfg config.Configure, branch string, conn *websocket
 	dr, _ := sd.Repository()
 	dw, _ := dr.Worktree()
 
-	if err = dw.Checkout(&git.CheckoutOptions{
-		Force:  true,
-		Branch: plumbing.NewRemoteReferenceName(git.DefaultRemoteName, branch),
-	}); err != nil {
+	if err = d.gitCheckout(dw, branch, 1); err != nil {
 		return
 	}
 
-	err = dw.Pull(&git.PullOptions{
-		Auth:  gitAuth,
-		Force: true,
-	})
-	if err != nil && !errors.Is(err, git.NoErrAlreadyUpToDate) {
+	if err = d.gitPull(dw, gitAuth, 1); err != nil {
 		return
 	}
-	err = dw.Checkout(&git.CheckoutOptions{
-		Branch: plumbing.NewRemoteReferenceName(git.DefaultRemoteName, branch),
-	})
-	if err != nil && !errors.Is(err, git.ErrUnstagedChanges) {
-		return
-	}
+
 	ml, err := r.Log(&git.LogOptions{})
 	if err != nil {
 		return
@@ -426,7 +433,7 @@ func (d *DeployService) Build(cfg config.Configure, gitLog string, conn *websock
 	defer func() {
 		_ = os.Chdir(dir)
 		if err != nil {
-			dlog.Error(err)
+			dlog.Error(err, string(debug.Stack()))
 			flush("打包错误 💔💔💔"+err.Error(), conn)
 		} else {
 			dlog.Info("打包版本【" + version + "】 Success 💯💯💯")
@@ -449,19 +456,23 @@ func (d *DeployService) Build(cfg config.Configure, gitLog string, conn *websock
 
 	// 版本信息
 	version = "v" + time.Now().Format("20060102150405")
-	ldflags := fmt.Sprintf(`-ldflags=-X main.version=%s -X "main.gitInfo=%s"`, version, strings.ReplaceAll(strings.ReplaceAll(gitLog, "\n", ";"), "\t", "-"))
+	gitLog = strings.ReplaceAll(gitLog, "\n", ";")
+	gitLog = strings.ReplaceAll(gitLog, "\t", "-")
+	gitLog = strings.ReplaceAll(gitLog, " ", ",")
+	ldflags := fmt.Sprintf(`-ldflags=-X main.version=%s -X "main.gitInfo=%s"`, version, gitLog)
 
 	for _, build := range cfg.BuildConfigs {
 		if err = os.Chdir(build.ModPath); err != nil {
 			return err
 		}
 		flush("【"+build.Name+"】 go mod tidy start...", conn)
-		tidy, err := exec.Command("go", "mod", "tidy").CombinedOutput()
+		w, _ := conn.NextWriter(websocket.TextMessage)
+		cmd := exec.Command("go", "mod", "tidy")
+		cmd.Stdout = io.MultiWriter(os.Stdout, w)
+		cmd.Stderr = io.MultiWriter(os.Stdout, w)
+		err := cmd.Run()
 		if err != nil {
 			return err
-		}
-		if len(tidy) > 0 {
-			flush(string(tidy), conn)
 		}
 
 		flush("【"+build.Name+"】go mod tidy finished...", conn)
@@ -497,7 +508,7 @@ func (d *DeployService) ZipFiles(projectPath, zipFilePath string, files []string
 	defer func() {
 		_ = os.Chdir(dir)
 		if err != nil {
-			dlog.Error(err)
+			dlog.Error(err, string(debug.Stack()))
 			flush("压缩 错误 💔💔💔"+err.Error(), conn)
 		} else {
 			dlog.Info("压缩 Success 👌👌👌")
@@ -563,7 +574,7 @@ func (d *DeployService) ScpUpload(conf config.Configure, binName, restartCmd str
 	defer func() {
 		_ = os.Chdir(dir)
 		if err != nil {
-			dlog.Error(err)
+			dlog.Error(err, string(debug.Stack()))
 			flush("服务器执行失败 💔💔💔"+err.Error(), conn)
 		} else {
 			dlog.Info("服务器执行 Success 💯💯💯")

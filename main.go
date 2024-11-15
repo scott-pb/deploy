@@ -14,6 +14,7 @@ func init() {
 }
 
 func main() {
+	flag.Parse()
 	log.SetLogFile("deploy.log")
 	config.Init(configName)
 	router.InitRouter()

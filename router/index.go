@@ -92,7 +92,7 @@ func html(url string) string {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>soga 发布系统 </title>
+    <title>WebSocket 实时通信示例</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -112,7 +112,7 @@ func html(url string) string {
             z-index: 1000;
             display: flex;
             justify-content: center;
-            background-color: #007BFF;
+            background-color: #008CBA;
             color: white;
             padding: 10px;
         }
@@ -299,11 +299,12 @@ func html(url string) string {
     </style>
 </head>
 <body>
-<div class="toolbar">
+<div class="toolbar" style="display: flex;flex-wrap: wrap; ">
     <button class="connect" id="connect">连接</button>
-    <button class="disconnect" id="disconnect">断开</button>
-    <button class="disconnect" id="clear">清空</button>
-    <button class="disconnect" id="openLoginBtn">登录</button>
+    <button class="disconnect" style="background-color: #f44336;" id="disconnect">断开</button>
+    <button class="disconnect" style="background-color: #e7e7e7;color: #e14e4e;" id="clear">清空</button>
+    <button class="disconnect" style="background-color: #4fc243;" id="openLoginBtn">登录</button>
+    <button class="disconnect" style="background-color: #555555;" id="LoginOut">登出</button>
 
 </div>
 <div class="form-container">
@@ -410,7 +411,7 @@ func html(url string) string {
 
         ws.onopen = function () {
             document.getElementById('status').innerHTML = '<span style="color: #5daf34;font-weight: bold;">状态：连接成功</span>';
- 			document.getElementById('messages').innerHTML = '';
+            document.getElementById('messages').innerHTML = '';
             startHeartbeat(); // 开始发送心跳
             sendHeartbeat(); // 连接成功后立即发送一次心跳
         };
@@ -461,7 +462,7 @@ func html(url string) string {
 
     document.getElementById('onsubmit').addEventListener('click', function () {
         if (ws && ws.readyState === WebSocket.OPEN) {
-			document.getElementById('messages').innerHTML = '';
+            document.getElementById('messages').innerHTML = '';
             if (document.querySelector('input[name="env"]:checked').value === "release") {
                 let userChoice = confirm("你确定要继续吗？");
                 if (!userChoice) {
@@ -489,6 +490,9 @@ func html(url string) string {
                 if (element.type === 'radio') {
                     if (element.checked) {
                         formData[element.name] = element.value;
+                        if (element.name === "restart") {
+                            formData[element.name] = element.value === "true";
+                        }
                     }
                     continue
                 }
@@ -555,14 +559,29 @@ func html(url string) string {
                 if (result.status === 200) {
                     localStorage.setItem("token", result.token);
                     document.getElementById('loginModal').style.display = 'none';
+                    document.getElementById('connect').click()
                 }
                 alert(result.message);
             }
         };
-        xhr.send(data)
-
-
+        xhr.send(data);
     });
+
+    document.getElementById('LoginOut').addEventListener('click', function () {
+        if (localStorage.getItem("token") === null) {
+            alert("您还没有登录");
+            return;
+        }
+        localStorage.removeItem("token")
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            let userChoice = confirm("你确定登出吗？");
+            if (!userChoice) {
+                return
+            }
+            ws.close();
+        }
+        alert("登出成功")
+    })
 
 </script>
 </body>

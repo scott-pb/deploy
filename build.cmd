@@ -10,7 +10,7 @@ SET ROOT=%cd%
 mkdir %ROOT%\bin\
 @echo Start build(v%datetime%) running 🚀🚀 ...
 
-go build -o .\bin\deploy -gcflags=all="-N -l" -ldflags="-X main.version=v%datetime%" -trimpath
-@echo soga_admin ✔️
+go build -o .\bin\soga_deploy -gcflags=all="-N -l" -ldflags="-X main.version=v%datetime%" -trimpath
+@echo soga_deploy ✔️
 pause
 exit

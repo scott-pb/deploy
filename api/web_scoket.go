@@ -48,6 +48,8 @@ func (w *WebSocket) WebSocketHandler(c *gin.Context) {
 	if err != nil {
 		panic(err)
 	}
+	// 关闭WebSocket连接
+	defer ws.Close()
 	clientIP := c.ClientIP()
 	fmt.Printf("Client IP: %s\n", clientIP)
 	s := internal.DeployService{}
@@ -101,6 +103,4 @@ func (w *WebSocket) WebSocketHandler(c *gin.Context) {
 		mu.Unlock()
 	}
 
-	// 关闭WebSocket连接
-	_ = ws.Close()
 }
