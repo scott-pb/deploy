@@ -119,7 +119,14 @@ func (d *DeployService) EnterpriseTest(conn *websocket.Conn, msg Message) {
 	for _, bcfg := range cfg.BuildConfigs {
 		files = append(files, bcfg.BinName)
 		fileNames = append(fileNames, bcfg.Name)
-		if bcfg.Name != "soga_tool" {
+		switch bcfg.Name {
+		case "soga_tool":
+			continue
+		case "soga_rpc_chat":
+			binNames = append(binNames, "soga_api_rpc_chat")
+		case "soga_rpc_game":
+			binNames = append(binNames, "soga_api_rpc_game")
+		default:
 			binNames = append(binNames, bcfg.Name)
 		}
 	}
@@ -167,11 +174,17 @@ func (d *DeployService) EnterpriseRelease(conn *websocket.Conn, msg Message) {
 	for _, bcfg := range cfg.BuildConfigs {
 		files = append(files, bcfg.BinName)
 		fileNames = append(fileNames, bcfg.Name)
-		if bcfg.Name != "soga_tool" {
-			binNames = append(binNames, bcfg.Name)
-		}
-		if bcfg.Name == "soga_cron" {
+		switch bcfg.Name {
+		case "soga_tool":
+			continue
+		case "soga_rpc_chat":
+			binNames = append(binNames, "soga_api_rpc_chat")
+		case "soga_rpc_game":
+			binNames = append(binNames, "soga_api_rpc_game")
+		case "soga_cron":
 			restartCmd = "mv /root/soga_im_enterprise/bin/soga_cron /root/soga_im_cron/ && mv /root/soga_im_cron/soga_cron /root/soga_im_cron/soga_im_cron && "
+		default:
+			binNames = append(binNames, bcfg.Name)
 		}
 	}
 
