@@ -323,6 +323,15 @@ func (d *DeployService) gitCheckout(wo *git.Worktree, branch string, try int) (e
 	}
 }
 
+type newWriter struct {
+	P []byte
+}
+
+func (w *newWriter) Write(p []byte) (n int, err error) {
+	w.P = append(w.P, p...)
+	return len(p), nil
+}
+
 // Git 拉取代码
 func (d *DeployService) Git(cfg config.Configure, branch string, conn *websocket.Conn) (log string, err error) {
 	flush("git 开始拉取... 🚀🚀🚀", conn)
@@ -336,107 +345,163 @@ func (d *DeployService) Git(cfg config.Configure, branch string, conn *websocket
 			flush("git Success 👌👌👌", conn)
 		}
 	}()
-	if _, err := os.Stat(cfg.ProjectPath); err != nil {
-		_ = os.Mkdir(cfg.ProjectPath, 0755)
-	}
-
-	var (
-		r       *git.Repository
-		gitAuth = &http.BasicAuth{
-			Username: cfg.UserName,
-			Password: cfg.PassWord,
-		}
-	)
-	r, err = git.PlainOpen(cfg.ProjectPath)
-	if err != nil {
-		if !errors.Is(err, git.ErrRepositoryNotExists) {
+	if _, err = os.Stat(cfg.ProjectPath); err != nil {
+		if err = os.MkdirAll(cfg.ProjectPath, fs.ModePerm); err != nil {
 			return
-		} else {
-			w, _ := conn.NextWriter(websocket.TextMessage)
-			r, err = git.PlainClone(cfg.ProjectPath, false, &git.CloneOptions{
-				URL:      cfg.GitUrl,
-				Progress: io.MultiWriter(os.Stdout, w),
-				Auth:     gitAuth,
-			})
-			if err != nil {
-				return
-			}
 		}
 	}
 
-	wo, err := r.Worktree()
-	if err != nil {
+	_ = os.Chdir(cfg.ProjectPath)
+
+	nW := &newWriter{}
+	w, _ := conn.NextWriter(websocket.TextMessage)
+	mw := io.MultiWriter(nW, w)
+
+	gitCmdFun := func(w io.Writer, arg ...string) (err error) {
+		cmd := exec.Command("git", arg...)
+		cmd.Stdout = w
+		cmd.Stderr = w
+		err = cmd.Run()
 		return
 	}
 
-	// Checkout
-	if err = d.gitCheckout(wo, branch, 1); err != nil {
+	url, _ := exec.Command("git", "remote", "-v").Output()
+	if len(url) == 0 {
+		if err = gitCmdFun(mw, "clone", cfg.GitUrl); err != nil {
+			return
+		}
+	}
+
+	if err = gitCmdFun(mw, "checkout", "."); err != nil {
 		return
 	}
 
-	// Pull
-	if err = d.gitPull(wo, gitAuth, 1); err != nil {
+	if err = gitCmdFun(mw, "fetch", "origin"); err != nil {
 		return
 	}
 
-	sd, err := wo.Submodule("depends")
-	if err != nil {
+	if err = gitCmdFun(mw, "checkout", branch); err != nil {
 		return
 	}
 
-	if err = sd.Init(); err != nil && !errors.Is(err, git.ErrSubmoduleAlreadyInitialized) {
+	if err = gitCmdFun(mw, "pull", "origin", branch, "--force"); err != nil {
 		return
 	}
 
-	err = sd.Update(&git.SubmoduleUpdateOptions{
-		Init: true,
-		Auth: gitAuth,
-	})
-	if err != nil {
+	if err = gitCmdFun(mw, "submodule", "update", "--init", "--recursive"); err != nil {
 		return
 	}
 
-	dr, _ := sd.Repository()
-	dw, _ := dr.Worktree()
+	_ = os.Chdir("depends")
 
-	if err = d.gitCheckout(dw, branch, 1); err != nil {
+	if err = gitCmdFun(mw, "checkout", "."); err != nil {
 		return
 	}
 
-	if err = d.gitPull(dw, gitAuth, 1); err != nil {
+	if err = gitCmdFun(mw, "fetch", "origin"); err != nil {
 		return
 	}
 
-	ml, err := r.Log(&git.LogOptions{})
-	if err != nil {
+	if err = gitCmdFun(mw, "checkout", branch); err != nil {
 		return
 	}
-	defer ml.Close()
-	commit, _ := ml.Next()
-	b := fmt.Sprintf("【log】:%s %s %s %s", commit.Author.When.Format(time.DateTime), commit.Author.Name, commit.Hash.String()[:8], commit.Message)
-	if strings.Index(commit.Message, "Merge remote-tracking branch") != -1 {
-		commit, _ = ml.Next()
-		b += fmt.Sprintf(";%s %s %s %s", commit.Author.When.Format(time.DateTime), commit.Author.Name, commit.Hash.String()[:8], commit.Message)
-	}
-	flush(b, conn)
 
-	sl, err := dr.Log(&git.LogOptions{})
-	if err != nil {
+	if err = gitCmdFun(mw, "pull", "origin", branch, "--force"); err != nil {
 		return
 	}
-	defer sl.Close()
-	scommit, _ := sl.Next()
-	sb := fmt.Sprintf("【depends-log】:%s %s %s %s", commit.Author.When.Format(time.DateTime), scommit.Author.Name, scommit.Hash.String()[:8], scommit.Message)
-	if strings.Index(scommit.Message, "Merge remote-tracking branch") != -1 {
-		scommit, _ = sl.Next()
-		sb += fmt.Sprintf("【depends-log】:%s %s %s %s", commit.Author.When.Format(time.DateTime), scommit.Author.Name, scommit.Hash.String()[:8], scommit.Message)
-	}
-	if err != nil {
-		return
-	}
-	flush(sb, conn)
 
-	return b + sb, nil
+	return string(nW.P), nil
+
+	//r, err = git.PlainOpen(cfg.ProjectPath)
+	//if err != nil {
+	//	if !errors.Is(err, git.ErrRepositoryNotExists) {
+	//		return
+	//	} else {
+	//		w, _ := conn.NextWriter(websocket.TextMessage)
+	//		r, err = git.PlainClone(cfg.ProjectPath, false, &git.CloneOptions{
+	//			URL:      cfg.GitUrl,
+	//			Progress: io.MultiWriter(os.Stdout, w),
+	//			Auth:     gitAuth,
+	//		})
+	//		if err != nil {
+	//			return
+	//		}
+	//	}
+	//}
+	//
+	//wo, err := r.Worktree()
+	//if err != nil {
+	//	return
+	//}
+	//
+	//// Checkout
+	//if err = d.gitCheckout(wo, branch, 1); err != nil {
+	//	return
+	//}
+	//
+	//// Pull
+	//if err = d.gitPull(wo, gitAuth, 1); err != nil {
+	//	return
+	//}
+	//
+	//sd, err := wo.Submodule("depends")
+	//if err != nil {
+	//	return
+	//}
+	//
+	//if err = sd.Init(); err != nil && !errors.Is(err, git.ErrSubmoduleAlreadyInitialized) {
+	//	return
+	//}
+	//
+	//err = sd.Update(&git.SubmoduleUpdateOptions{
+	//	Init: true,
+	//	Auth: gitAuth,
+	//})
+	//if err != nil {
+	//	return
+	//}
+	//
+	//dr, _ := sd.Repository()
+	//dw, _ := dr.Worktree()
+	//
+	//if err = d.gitCheckout(dw, branch, 1); err != nil {
+	//	return
+	//}
+	//
+	//if err = d.gitPull(dw, gitAuth, 1); err != nil {
+	//	return
+	//}
+	//
+	//ml, err := r.Log(&git.LogOptions{})
+	//if err != nil {
+	//	return
+	//}
+	//defer ml.Close()
+	//commit, _ := ml.Next()
+	//b := fmt.Sprintf("【log】:%s %s %s %s", commit.Author.When.Format(time.DateTime), commit.Author.Name, commit.Hash.String()[:8], commit.Message)
+	//if strings.Index(commit.Message, "Merge remote-tracking branch") != -1 {
+	//	commit, _ = ml.Next()
+	//	b += fmt.Sprintf(";%s %s %s %s", commit.Author.When.Format(time.DateTime), commit.Author.Name, commit.Hash.String()[:8], commit.Message)
+	//}
+	//flush(b, conn)
+	//
+	//sl, err := dr.Log(&git.LogOptions{})
+	//if err != nil {
+	//	return
+	//}
+	//defer sl.Close()
+	//scommit, _ := sl.Next()
+	//sb := fmt.Sprintf("【depends-log】:%s %s %s %s", commit.Author.When.Format(time.DateTime), scommit.Author.Name, scommit.Hash.String()[:8], scommit.Message)
+	//if strings.Index(scommit.Message, "Merge remote-tracking branch") != -1 {
+	//	scommit, _ = sl.Next()
+	//	sb += fmt.Sprintf("【depends-log】:%s %s %s %s", commit.Author.When.Format(time.DateTime), scommit.Author.Name, scommit.Hash.String()[:8], scommit.Message)
+	//}
+	//if err != nil {
+	//	return
+	//}
+	//flush(sb, conn)
+	//
+	//return b + sb, nil
 }
 
 // Build 更新
