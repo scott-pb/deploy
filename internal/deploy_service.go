@@ -2,6 +2,7 @@ package internal
 
 import (
 	"archive/zip"
+	"bytes"
 	"deploy/config"
 	dlog "deploy/log"
 	"errors"
@@ -18,6 +19,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -42,6 +44,23 @@ type Message struct {
 	Branch  string   `json:"branch"`
 	Restart bool     `json:"restart"`
 	Items   []string `json:"items"`
+}
+
+type newWriter struct {
+	Wr io.Writer
+}
+
+func (w *newWriter) Write(p []byte) (n int, err error) {
+	if len(p) > 0 {
+		p = bytes.ReplaceAll(p, []byte("\r"), []byte(""))
+		p = bytes.ReplaceAll(p, []byte(" "), []byte(""))
+		if len(p) > 0 {
+			p = append(p, []byte("<br>")...)
+			return w.Wr.Write(p)
+		}
+
+	}
+	return
 }
 
 func (d *DeployService) AdminTest(conn *websocket.Conn, msg Message) {
@@ -290,7 +309,7 @@ func (d *DeployService) ServerRelease(conn *websocket.Conn, msg Message) {
 }
 
 func flush(msg string, conn *websocket.Conn) {
-	_ = conn.WriteMessage(websocket.TextMessage, []byte(msg))
+	_ = conn.WriteMessage(websocket.TextMessage, []byte(msg+"<br>"))
 }
 
 func (d *DeployService) gitPull(worktree *git.Worktree, auth *http.BasicAuth, try int) (err error) {
@@ -323,13 +342,17 @@ func (d *DeployService) gitCheckout(wo *git.Worktree, branch string, try int) (e
 	}
 }
 
-type newWriter struct {
-	P []byte
-}
+func (d *DeployService) GitLog(depth int) (str string, err error) {
+	gLog, err := exec.Command("git", "log", "-n", strconv.Itoa(depth), "--format='%h- %an, %ar : %s'").Output()
+	if err != nil {
+		return
+	}
+	if strings.Index(string(gLog), "Merge remote-tracking branch") == -1 {
+		return string(gLog), nil
+	} else {
+		return d.GitLog(depth + 1)
+	}
 
-func (w *newWriter) Write(p []byte) (n int, err error) {
-	w.P = append(w.P, p...)
-	return len(p), nil
 }
 
 // Git 拉取代码
@@ -353,9 +376,7 @@ func (d *DeployService) Git(cfg config.Configure, branch string, conn *websocket
 
 	_ = os.Chdir(cfg.ProjectPath)
 
-	nW := &newWriter{}
-	w, _ := conn.NextWriter(websocket.TextMessage)
-	mw := io.MultiWriter(nW, w)
+	mw, _ := conn.NextWriter(websocket.TextMessage)
 
 	gitCmdFun := func(w io.Writer, arg ...string) (err error) {
 		cmd := exec.Command("git", arg...)
@@ -365,14 +386,13 @@ func (d *DeployService) Git(cfg config.Configure, branch string, conn *websocket
 		return
 	}
 
-	url, _ := exec.Command("git", "remote", "-v").Output()
-	if len(url) == 0 {
+	if _, err = os.Stat(cfg.ProjectName); err != nil {
 		if err = gitCmdFun(mw, "clone", cfg.GitUrl); err != nil {
 			return
 		}
 	}
 
-	if err = gitCmdFun(mw, "checkout", "."); err != nil {
+	if err = os.Chdir(cfg.ProjectName); err != nil {
 		return
 	}
 
@@ -388,13 +408,14 @@ func (d *DeployService) Git(cfg config.Configure, branch string, conn *websocket
 		return
 	}
 
-	if err = gitCmdFun(mw, "submodule", "update", "--init", "--recursive"); err != nil {
+	log, err = d.GitLog(1)
+	if err != nil {
 		return
 	}
 
 	_ = os.Chdir("depends")
 
-	if err = gitCmdFun(mw, "checkout", "."); err != nil {
+	if err = gitCmdFun(mw, "submodule", "update", "--init", "--recursive"); err != nil {
 		return
 	}
 
@@ -410,98 +431,12 @@ func (d *DeployService) Git(cfg config.Configure, branch string, conn *websocket
 		return
 	}
 
-	return string(nW.P), nil
+	dLog, err := d.GitLog(1)
+	if err != nil {
+		return
+	}
 
-	//r, err = git.PlainOpen(cfg.ProjectPath)
-	//if err != nil {
-	//	if !errors.Is(err, git.ErrRepositoryNotExists) {
-	//		return
-	//	} else {
-	//		w, _ := conn.NextWriter(websocket.TextMessage)
-	//		r, err = git.PlainClone(cfg.ProjectPath, false, &git.CloneOptions{
-	//			URL:      cfg.GitUrl,
-	//			Progress: io.MultiWriter(os.Stdout, w),
-	//			Auth:     gitAuth,
-	//		})
-	//		if err != nil {
-	//			return
-	//		}
-	//	}
-	//}
-	//
-	//wo, err := r.Worktree()
-	//if err != nil {
-	//	return
-	//}
-	//
-	//// Checkout
-	//if err = d.gitCheckout(wo, branch, 1); err != nil {
-	//	return
-	//}
-	//
-	//// Pull
-	//if err = d.gitPull(wo, gitAuth, 1); err != nil {
-	//	return
-	//}
-	//
-	//sd, err := wo.Submodule("depends")
-	//if err != nil {
-	//	return
-	//}
-	//
-	//if err = sd.Init(); err != nil && !errors.Is(err, git.ErrSubmoduleAlreadyInitialized) {
-	//	return
-	//}
-	//
-	//err = sd.Update(&git.SubmoduleUpdateOptions{
-	//	Init: true,
-	//	Auth: gitAuth,
-	//})
-	//if err != nil {
-	//	return
-	//}
-	//
-	//dr, _ := sd.Repository()
-	//dw, _ := dr.Worktree()
-	//
-	//if err = d.gitCheckout(dw, branch, 1); err != nil {
-	//	return
-	//}
-	//
-	//if err = d.gitPull(dw, gitAuth, 1); err != nil {
-	//	return
-	//}
-	//
-	//ml, err := r.Log(&git.LogOptions{})
-	//if err != nil {
-	//	return
-	//}
-	//defer ml.Close()
-	//commit, _ := ml.Next()
-	//b := fmt.Sprintf("【log】:%s %s %s %s", commit.Author.When.Format(time.DateTime), commit.Author.Name, commit.Hash.String()[:8], commit.Message)
-	//if strings.Index(commit.Message, "Merge remote-tracking branch") != -1 {
-	//	commit, _ = ml.Next()
-	//	b += fmt.Sprintf(";%s %s %s %s", commit.Author.When.Format(time.DateTime), commit.Author.Name, commit.Hash.String()[:8], commit.Message)
-	//}
-	//flush(b, conn)
-	//
-	//sl, err := dr.Log(&git.LogOptions{})
-	//if err != nil {
-	//	return
-	//}
-	//defer sl.Close()
-	//scommit, _ := sl.Next()
-	//sb := fmt.Sprintf("【depends-log】:%s %s %s %s", commit.Author.When.Format(time.DateTime), scommit.Author.Name, scommit.Hash.String()[:8], scommit.Message)
-	//if strings.Index(scommit.Message, "Merge remote-tracking branch") != -1 {
-	//	scommit, _ = sl.Next()
-	//	sb += fmt.Sprintf("【depends-log】:%s %s %s %s", commit.Author.When.Format(time.DateTime), scommit.Author.Name, scommit.Hash.String()[:8], scommit.Message)
-	//}
-	//if err != nil {
-	//	return
-	//}
-	//flush(sb, conn)
-	//
-	//return b + sb, nil
+	return log + dLog, nil
 }
 
 // Build 更新
@@ -714,25 +649,27 @@ func (d *DeployService) ScpUpload(conf config.Configure, binName, restartCmd str
 
 	writer, _ := conn.NextWriter(websocket.TextMessage)
 
+	newWriter := &newWriter{Wr: writer}
+
 	bar := progressbar.NewOptions64(
 		fileSize,
-		progressbar.OptionSetDescription(""),
+		progressbar.OptionSetDescription("uploading:"),
 		progressbar.OptionSetWidth(10),
 		progressbar.OptionShowBytes(true),
-		progressbar.OptionSetWriter(writer),
+		progressbar.OptionSetWriter(newWriter),
 		progressbar.OptionSetTheme(progressbar.Theme{
-			Saucer:        "",
-			SaucerHead:    "",
-			SaucerPadding: "",
-			BarStart:      "",
-			BarEnd:        "",
+			Saucer:        "=",
+			SaucerHead:    ">",
+			SaucerPadding: "-",
+			BarStart:      "[",
+			BarEnd:        "]",
 		}),
 	)
 
 	bar.StartWithoutRender()
 
 	// 包装文件读取器，监控进度
-	_, _ = fmt.Fprintf(writer, "\r%s", bar.String())
+	_, _ = fmt.Fprintf(writer, "%s", bar.String())
 	progressReader := io.TeeReader(localFile, bar)
 
 	// 复制文件内容到远程服务器

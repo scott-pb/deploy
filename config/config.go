@@ -31,8 +31,8 @@ type Configure struct {
 }
 
 type Account struct {
-	Username string `json:"username"yaml:"username"`
-	Password string `json:"password" yaml:"password"`
+	Username string `json:"username" form:"username" yaml:"username"`
+	Password string `json:"password" form:"password" yaml:"password"`
 }
 
 type BuildConfig struct {
@@ -44,6 +44,7 @@ type BuildConfig struct {
 
 type ProjectConfig struct {
 	ProjectPath string `json:"project_path" yaml:"project_path"`
+	ProjectName string `json:"project_name" yaml:"project_name"`
 	BinPath     string `json:"bin_path" yaml:"bin_path"`
 	GitUrl      string `json:"git_url" yaml:"git_url"`
 }
