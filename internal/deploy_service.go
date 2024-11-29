@@ -413,11 +413,11 @@ func (d *DeployService) Git(cfg config.Configure, branch string, conn *websocket
 		return
 	}
 
-	_ = os.Chdir("depends")
-
 	if err = gitCmdFun(mw, "submodule", "update", "--init", "--recursive"); err != nil {
 		return
 	}
+
+	_ = os.Chdir("depends")
 
 	if err = gitCmdFun(mw, "fetch", "origin"); err != nil {
 		return
@@ -436,7 +436,7 @@ func (d *DeployService) Git(cfg config.Configure, branch string, conn *websocket
 		return
 	}
 
-	return log + dLog, nil
+	return log + "【depends】:" + dLog, nil
 }
 
 // Build 更新

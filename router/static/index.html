@@ -81,7 +81,7 @@
     let heartbeatInterval = null;
     let loadCloseIndex = null;
     let pingValue = 0;
-    let HOST = {{.host}}
+    let HOST = "{{.host}}"
 
     function sendHeartbeat() {
         if (pingValue > 3) {
@@ -121,7 +121,7 @@
             return;
         }
 
-        ws = new WebSocket('ws://' + HOST+'/webSocket?' + token);
+        ws = new WebSocket('ws://' + HOST + '/webSocket?' + token);
 
         ws.onopen = function () {
             pingValue = 0
@@ -215,12 +215,21 @@
 
     // 提交事件
     layui.form.on('submit(submit)', function (data) {
+        document.getElementById('messages').innerHTML = '';
         if (ws === null || ws.readyState === WebSocket.CLOSED) {
             layer.msg("未连接websocket", {icon: 2});
             return false;
         }
         let field = data.field; // 获取表单字段值
         field.restart = field.restart === "true"
+        let itemsArray = [];
+        for (let key in field) {
+            if (key.match(/items\[\d\]/)) {
+                itemsArray.push(field[key])
+            }
+        }
+        field.items = itemsArray
+
         // 显示填写结果，仅作演示用
         if (field.env === "release") {
             let confirm = layer.confirm('发布release环境确定继续吗?', {
@@ -241,6 +250,7 @@
         layer.alert(json);
     });
 
+    // 退出登录
     $("#loginOut").click(function () {
         let token = localStorage.getItem("token");
         if (token == null) {
@@ -258,6 +268,7 @@
     });
 
 
+    // 登录弹窗
     $("#openLoginBtn").click(function () {
         let token = localStorage.getItem("token");
         let content = '<form class="layui-form">\n' +
@@ -310,7 +321,7 @@
         }
     });
 
-    // 提交事件
+    // 登录提交事件
     layui.form.on('submit(login)', function (data) {
         let field = data.field; // 获取表单字段值
         let loadIndex = layer.msg('登录中', {
@@ -318,29 +329,29 @@
             shade: 0.01
         });
         $.ajax({
-            url: 'http://' + HOST+'/login',
-            type:'POST',
-            data:JSON.stringify(field),
-            dataType:"json",
-            contentType:"application/json",
-            success:function (response) {
-            if (response.status === 200) {
-                localStorage.setItem("token", response.token)
-                layer.close(loginOpen)
-                $("#connect").click()
-                layer.msg("登录成功")
-            } else {
-                layer.alert(response.message)
+            url: 'http://' + HOST + '/login',
+            type: 'POST',
+            data: JSON.stringify(field),
+            dataType: "json",
+            contentType: "application/json",
+            success: function (response) {
+                if (response.status === 200) {
+                    localStorage.setItem("token", response.token)
+                    layer.close(loginOpen)
+                    $("#connect").click()
+                    layer.msg("登录成功")
+                } else {
+                    layer.alert(response.message)
+                }
+                layer.close(loadIndex)
+            },
+            error: function (error) {
+                // 错误回调函数，处理请求失败的情况
+                console.log(error)
+                layer.msg("登录失败")
+                layer.close(loadIndex)
             }
-            layer.close(loadIndex)
-        },
-        error: function (error) {
-            // 错误回调函数，处理请求失败的情况
-            console.log(error)
-            layer.msg("登录失败")
-            layer.close(loadIndex)
-        }
-    });
+        });
 
         return false; // 阻止默认 form 跳转
     });
