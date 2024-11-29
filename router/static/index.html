@@ -216,6 +216,9 @@
     // 提交事件
     layui.form.on('submit(submit)', function (data) {
         document.getElementById('messages').innerHTML = '';
+        if (localStorage.getItem("token") !== null && ws === null){
+            $("#connect").click()
+        }
         if (ws === null || ws.readyState === WebSocket.CLOSED) {
             layer.msg("未连接websocket", {icon: 2});
             return false;
