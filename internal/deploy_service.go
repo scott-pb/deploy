@@ -164,7 +164,7 @@ func (d *DeployService) EnterpriseTest(conn *websocket.Conn, msg Message) {
 }
 
 func (d *DeployService) EnterpriseRelease(conn *websocket.Conn, msg Message) {
-	cfg := config.Config.EnterpriseTest
+	cfg := config.Config.EnterpriseRelease
 
 	gitLog, err := d.Git(cfg, msg.Branch, conn)
 	if err != nil {
