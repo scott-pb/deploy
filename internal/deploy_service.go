@@ -21,6 +21,7 @@ import (
 	"runtime/debug"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -36,6 +37,7 @@ type ClientConfig struct {
 var (
 	d, _ = os.Getwd()
 	dir  = strings.ReplaceAll(d, "\\", "/") + "/"
+	mu   sync.Mutex
 )
 
 type Message struct {
@@ -67,7 +69,7 @@ func (d *DeployService) AdminTest(conn *websocket.Conn, msg Message) {
 	adminConf := config.Config.AdminTest
 	err := os.Chdir(dir)
 	if err != nil {
-		flush("Chdir err"+err.Error(), conn)
+		d.Flush("Chdir err"+err.Error(), conn)
 	}
 	gitLog, err := d.Git(adminConf, msg.Branch, conn)
 	if err != nil {
@@ -89,7 +91,7 @@ func (d *DeployService) AdminTest(conn *websocket.Conn, msg Message) {
 func (d *DeployService) AdminRelease(conn *websocket.Conn, msg Message) {
 	adminConf := config.Config.AdminRelease
 	if err := os.Chdir(dir); err != nil {
-		flush("Chdir err"+err.Error(), conn)
+		d.Flush("Chdir err"+err.Error(), conn)
 	}
 
 	gitLog, err := d.Git(adminConf, msg.Branch, conn)
@@ -131,7 +133,7 @@ func (d *DeployService) EnterpriseTest(conn *websocket.Conn, msg Message) {
 	}
 	cfg.BuildConfigs = newBuildConfig
 	if len(cfg.BuildConfigs) == 0 {
-		flush("没有可打包的💔💔💔", conn)
+		d.Flush("没有可打包的💔💔💔", conn)
 		return
 	}
 
@@ -185,7 +187,7 @@ func (d *DeployService) EnterpriseRelease(conn *websocket.Conn, msg Message) {
 	}
 	cfg.BuildConfigs = newBuildConfig
 	if len(cfg.BuildConfigs) == 0 {
-		flush("没有可打包的💔💔💔", conn)
+		d.Flush("没有可打包的💔💔💔", conn)
 		return
 	}
 
@@ -242,7 +244,7 @@ func (d *DeployService) ServerTest(conn *websocket.Conn, msg Message) {
 	}
 
 	if len(cfg.BuildConfigs) == 0 {
-		flush("没有可打包的💔💔💔", conn)
+		d.Flush("没有可打包的💔💔💔", conn)
 		return
 	}
 
@@ -286,7 +288,7 @@ func (d *DeployService) ServerRelease(conn *websocket.Conn, msg Message) {
 	}
 
 	if len(cfg.BuildConfigs) == 0 {
-		flush("没有可打包的💔💔💔", conn)
+		d.Flush("没有可打包的💔💔💔", conn)
 		return
 	}
 
@@ -308,9 +310,11 @@ func (d *DeployService) ServerRelease(conn *websocket.Conn, msg Message) {
 	return
 }
 
-func flush(msg string, conn *websocket.Conn) {
+func (d *DeployService) Flush(msg string, conn *websocket.Conn) {
+	mu.Lock()
+	defer mu.Unlock()
 	_ = conn.SetReadDeadline(time.Now().Add(time.Minute))
-	_ = conn.WriteMessage(websocket.TextMessage, []byte(msg+"<br>"))
+	_ = conn.WriteMessage(websocket.TextMessage, []byte(msg))
 }
 
 func (d *DeployService) gitPull(worktree *git.Worktree, auth *http.BasicAuth, try int) (err error) {
@@ -351,22 +355,25 @@ func (d *DeployService) GitLog(depth int) (str string, err error) {
 	if strings.Index(string(gLog), "Merge remote-tracking branch") == -1 {
 		return string(gLog), nil
 	} else {
-		return d.GitLog(depth + 1)
+		if depth == 1 {
+			return d.GitLog(depth + 1)
+		}
+		return string(gLog), nil
 	}
 
 }
 
 // Git 拉取代码
 func (d *DeployService) Git(cfg config.Configure, branch string, conn *websocket.Conn) (log string, err error) {
-	flush("git 开始拉取... 🚀🚀🚀", conn)
+	d.Flush("git 开始拉取... 🚀🚀🚀", conn)
 	defer func() {
 		_ = os.Chdir(dir)
 		if err != nil {
-			flush("git 错误 💔💔💔"+err.Error(), conn)
+			d.Flush("git 错误 💔💔💔"+err.Error(), conn)
 			dlog.Error(err, string(debug.Stack()))
 		} else {
 			dlog.Info("git Success 👌👌👌")
-			flush("git Success 👌👌👌", conn)
+			d.Flush("git Success 👌👌👌", conn)
 		}
 	}()
 	if _, err = os.Stat(cfg.ProjectPath); err != nil {
@@ -376,7 +383,8 @@ func (d *DeployService) Git(cfg config.Configure, branch string, conn *websocket
 	}
 
 	_ = os.Chdir(cfg.ProjectPath)
-
+	mu.Lock()
+	defer mu.Unlock()
 	mw, _ := conn.NextWriter(websocket.TextMessage)
 
 	gitCmdFun := func(w io.Writer, arg ...string) (err error) {
@@ -442,16 +450,16 @@ func (d *DeployService) Git(cfg config.Configure, branch string, conn *websocket
 
 // Build 更新
 func (d *DeployService) Build(cfg config.Configure, gitLog string, conn *websocket.Conn) (err error) {
-	flush("开始打包...🚀🚀🚀 ", conn)
+	d.Flush("开始打包...🚀🚀🚀 ", conn)
 	var version string
 	defer func() {
 		_ = os.Chdir(dir)
 		if err != nil {
 			dlog.Error(err, string(debug.Stack()))
-			flush("打包错误 💔💔💔"+err.Error(), conn)
+			d.Flush("打包错误 💔💔💔"+err.Error(), conn)
 		} else {
 			dlog.Info("打包版本【" + version + "】 Success 💯💯💯")
-			flush("打包版本【"+version+"】 Success 💯💯💯", conn)
+			d.Flush("打包版本【"+version+"】 Success 💯💯💯", conn)
 		}
 	}()
 	// 存放bin的目录
@@ -479,7 +487,7 @@ func (d *DeployService) Build(cfg config.Configure, gitLog string, conn *websock
 		if err = os.Chdir(build.ModPath); err != nil {
 			return err
 		}
-		flush("【"+build.Name+"】 go mod tidy start...", conn)
+		d.Flush("【"+build.Name+"】 go mod tidy start...", conn)
 		w, _ := conn.NextWriter(websocket.TextMessage)
 		cmd := exec.Command("go", "mod", "tidy")
 		cmd.Stdout = io.MultiWriter(os.Stdout, w)
@@ -489,47 +497,47 @@ func (d *DeployService) Build(cfg config.Configure, gitLog string, conn *websock
 			return err
 		}
 
-		flush("【"+build.Name+"】go mod tidy finished...", conn)
+		d.Flush("【"+build.Name+"】go mod tidy finished...", conn)
 
-		flush("go build 【"+build.Name+"】 start... 🚀🚀🚀", conn)
+		d.Flush("go build 【"+build.Name+"】 start... 🚀🚀🚀", conn)
 		buildOut, err := exec.Command("go", "build", "-o", dir+cfg.ProjectPath+"/"+build.BinName, "-gcflags=all=-N -l", ldflags, "-trimpath").CombinedOutput()
 		if len(buildOut) > 0 {
-			flush(string(buildOut), conn)
+			d.Flush(string(buildOut), conn)
 		}
 		if err != nil {
 			return err
 		}
 
-		flush("go build 【"+build.Name+"】 success... 👌👌👌", conn)
+		d.Flush("go build 【"+build.Name+"】 success... 👌👌👌", conn)
 		_ = os.Chdir(dir)
 	}
 
-	flush("go build all finished...👍👍👍", conn)
+	d.Flush("go build all finished...👍👍👍", conn)
 	return
 }
 
 func (d *DeployService) ZipFiles(projectPath, zipFilePath string, files []string, conn *websocket.Conn) (err error) {
 	_ = os.Chdir(projectPath)
-	flush("开始删除压缩文件"+zipFilePath+"...🚀🚀🚀", conn)
+	d.Flush("开始删除压缩文件"+zipFilePath+"...🚀🚀🚀", conn)
 	// 删除压缩文件
 	if _, err = os.Stat(zipFilePath); err == nil {
 		if err = os.Remove(zipFilePath); err != nil {
 			return err
 		}
 	}
-	flush("删除压缩文件成功"+zipFilePath+"...✔️✔️✔️", conn)
+	d.Flush("删除压缩文件成功"+zipFilePath+"...✔️✔️✔️", conn)
 
 	defer func() {
 		_ = os.Chdir(dir)
 		if err != nil {
 			dlog.Error(err, string(debug.Stack()))
-			flush("压缩 错误 💔💔💔"+err.Error(), conn)
+			d.Flush("压缩 错误 💔💔💔"+err.Error(), conn)
 		} else {
 			dlog.Info("压缩 Success 👌👌👌")
-			flush("压缩 Success 👌👌👌", conn)
+			d.Flush("压缩 Success 👌👌👌", conn)
 		}
 	}()
-	flush("开始压缩...🚀🚀🚀", conn)
+	d.Flush("开始压缩...🚀🚀🚀", conn)
 	// 创建 ZIP 文件
 	zipFile, err := os.Create(zipFilePath)
 	if err != nil {
@@ -542,7 +550,7 @@ func (d *DeployService) ZipFiles(projectPath, zipFilePath string, files []string
 	defer zipWriter.Close()
 
 	for _, file := range files {
-		flush("开始压缩文件"+file+"...🚀🚀🚀", conn)
+		d.Flush("开始压缩文件"+file+"...🚀🚀🚀", conn)
 		// 打开要压缩的文件
 		fileToZip, err := os.Open(file)
 		if err != nil {
@@ -576,7 +584,7 @@ func (d *DeployService) ZipFiles(projectPath, zipFilePath string, files []string
 		if _, err := io.Copy(writer, fileToZip); err != nil {
 			return fmt.Errorf("写入文件 %s 到 ZIP 失败: %w", file, err)
 		}
-		flush("压缩文件"+file+"...👌👌👌", conn)
+		d.Flush("压缩文件"+file+"...👌👌👌", conn)
 	}
 
 	return nil
@@ -584,15 +592,15 @@ func (d *DeployService) ZipFiles(projectPath, zipFilePath string, files []string
 
 func (d *DeployService) ScpUpload(conf config.Configure, binName, restartCmd string, restart bool, conn *websocket.Conn) (err error) {
 	_ = os.Chdir(conf.ProjectPath)
-	flush("开始远程服务器 "+conf.Host+" 执行...🚀🚀🚀 ", conn)
+	d.Flush("开始远程服务器 "+conf.Host+" 执行...🚀🚀🚀 ", conn)
 	defer func() {
 		_ = os.Chdir(dir)
 		if err != nil {
 			dlog.Error(err, string(debug.Stack()))
-			flush("服务器执行失败 💔💔💔"+err.Error(), conn)
+			d.Flush("服务器执行失败 💔💔💔"+err.Error(), conn)
 		} else {
 			dlog.Info("服务器执行 Success 💯💯💯")
-			flush("服务器执行 Success 💯💯💯", conn)
+			d.Flush("服务器执行 Success 💯💯💯", conn)
 		}
 	}()
 	// SSH 配置
@@ -637,7 +645,7 @@ func (d *DeployService) ScpUpload(conf config.Configure, binName, restartCmd str
 		return fmt.Errorf("无法启动会话: %w", err)
 	}
 
-	flush("开始上传 "+conf.Host+" 🚀🚀🚀 ", conn)
+	d.Flush("开始上传 "+conf.Host+" 🚀🚀🚀 ", conn)
 
 	// 文件传输前，必须要向远程服务器发送文件头信息，包括文件大小和权限
 	fileInfo, err := localFile.Stat()
@@ -648,6 +656,7 @@ func (d *DeployService) ScpUpload(conf config.Configure, binName, restartCmd str
 	fileName := fileInfo.Name()
 	_, _ = fmt.Fprintf(stdin, "C0644 %d %s\n", fileSize, fileName)
 
+	mu.Lock()
 	writer, _ := conn.NextWriter(websocket.TextMessage)
 
 	newWriter := &newWriter{Wr: writer}
@@ -681,16 +690,17 @@ func (d *DeployService) ScpUpload(conf config.Configure, binName, restartCmd str
 	// 结束文件传输
 	_, _ = fmt.Fprint(stdin, "\x00")
 	_ = stdin.Close()
+	mu.Unlock()
 
-	flush("上传完成 "+conf.Host+" ✌️✌️✌️ ", conn)
+	d.Flush("上传完成 "+conf.Host+" ✌️✌️✌️ ", conn)
 
 	// 等待会话结束
 	if err := session.Wait(); err != nil {
 		return fmt.Errorf("文件传输会话执行失败: %w", err)
 	}
-	flush("<br>文件上传成功...✔️✔️✔️", conn)
+	d.Flush("<br>文件上传成功...✔️✔️✔️", conn)
 
-	flush("服务器开始解压...🚀🚀🚀", conn)
+	d.Flush("服务器开始解压...🚀🚀🚀", conn)
 
 	// 解压
 	unsession, err := client.NewSession()
@@ -704,13 +714,13 @@ func (d *DeployService) ScpUpload(conf config.Configure, binName, restartCmd str
 	if err != nil {
 		return fmt.Errorf("解压会话执行失败 ssh: command %v failed", err)
 	}
-	flush(string(un), conn)
-	flush("服务器解压成功...✔️✔️✔️", conn)
+	d.Flush(string(un), conn)
+	d.Flush("服务器解压成功...✔️✔️✔️", conn)
 
 	// 需要重启
 	if restart {
 		// 重启
-		flush("服务器开始重启...🚀🚀🚀", conn)
+		d.Flush("服务器开始重启...🚀🚀🚀", conn)
 		resession, err := client.NewSession()
 		if err != nil {
 			return fmt.Errorf("无法创建 SSH 会话: %w", err)
@@ -721,8 +731,8 @@ func (d *DeployService) ScpUpload(conf config.Configure, binName, restartCmd str
 		if err != nil {
 			return fmt.Errorf("重启会话执行失败 ssh: command %v failed", err)
 		}
-		flush(string(re), conn)
-		flush("服务器重启成功...✔️✔️✔️", conn)
+		d.Flush(string(re), conn)
+		d.Flush("服务器重启成功...✔️✔️✔️", conn)
 	}
 
 	return nil

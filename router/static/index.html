@@ -46,7 +46,7 @@
         </div>
     </div>
 
-    <div class="layui-form-item">
+    <div class="layui-form-item" id="branch">
         <label class="layui-form-label">分支</label>
         <div class="layui-input-inline layui-input-wrap">
             <input type="text" name="branch" lay-verify="required" autocomplete="off" class="layui-input"
@@ -54,7 +54,7 @@
         </div>
     </div>
 
-    <div class="layui-form-item">
+    <div class="layui-form-item" id="restart">
         <label class="layui-form-label">重启</label>
         <div class="layui-input-block">
             <input type="radio" name="restart" value="true" title="true" checked>
@@ -63,7 +63,8 @@
     </div>
     <div class="layui-form-item">
         <div>
-            <button type="submit" class="layui-btn layui-btn-fluid" lay-submit lay-filter="submit">提交</button>
+            <button type="submit" id="submit" class="layui-btn layui-btn-fluid" lay-submit lay-filter="submit">提交
+            </button>
         </div>
     </div>
 </form>
@@ -80,19 +81,14 @@
     let ws = null;
     let heartbeatInterval = null;
     let loadCloseIndex = null;
-    let pingValue = 0;
-    let HOST = "{{.host}}"
+    let HOST = "{{.host}}";
+    let loadIndex = null;
+    let loadRunning = null;
+    let isRunning = false;
 
     function sendHeartbeat() {
-        if (pingValue > 3) {
-            if (ws !== null) {
-                ws.clone()
-            }
-            return
-        }
         if (ws && ws.readyState === WebSocket.OPEN) {
             ws.send('ping');
-            pingValue += 1
         }
     }
 
@@ -124,7 +120,6 @@
         ws = new WebSocket('ws://' + HOST + '/webSocket?' + token);
 
         ws.onopen = function () {
-            pingValue = 0
             document.getElementById('status').innerHTML = '<span style="color: #16b777;font-weight: bold;">状态：连接成功</span>';
             document.getElementById('messages').innerHTML = '';
             startHeartbeat(); // 开始发送心跳
@@ -132,7 +127,6 @@
         };
 
         ws.onmessage = function (event) {
-            pingValue = 0
             let data = event.data
             if (data.length === 0) {
                 return
@@ -146,19 +140,49 @@
                 ws.close(3008, "noLogin")
                 return
             }
-            document.getElementById('messages').innerHTML += data;
+
+            if (data.indexOf("运行中...") !== -1) {
+                if (loadIndex == null) {
+                    loadIndex = layer.msg(data, {
+                        icon: 16,
+                        shade: 0.01
+                    });
+                }
+                return;
+            }
+
+            if (loadIndex !== null) {
+                layer.close(loadIndex)
+            }
+            if (loadRunning) {
+                layer.close(loadRunning);
+            }
+            isRunning = true
+            if (data === "finished") {
+                isRunning = false;
+                $("#submit").removeClass("layui-btn-disabled")
+                return;
+            }
+
+            document.getElementById('messages').innerHTML += data + "<br>";
         };
 
         ws.onerror = function (error) {
-            pingValue = 0
             console.log(error)
+            isRunning = false
+            if (loadRunning) {
+                layer.close(loadRunning);
+            }
             layer.msg('WebSocket 连接错误', {icon: 0});
         };
 
         ws.onclose = function (event) {
-            pingValue = 0
-            layer.close(loadCloseIndex)
+            layer.close(loadCloseIndex);
+            if (loadRunning) {
+                layer.close(loadRunning);
+            }
             console.log(event.code);
+            isRunning = false
             let msg = '';
             if (event.code === 3008) {
                 msg = '请先登录';
@@ -191,9 +215,16 @@
     layui.form.on('select(select-project)', function (data) {
         let items = [];
         document.getElementById('checkItems').innerHTML = ''
+        $("#branch").show();
+        $("#restart").show();
         switch (data.value) {
             case "admin":
                 $("#items").hide();
+                break;
+            case "front":
+                $("#items").hide();
+                $("#branch").hide();
+                $("#restart").hide();
                 break;
             case "enterprise":
                 $("#items").show();
@@ -215,10 +246,14 @@
 
     // 提交事件
     layui.form.on('submit(submit)', function (data) {
-        document.getElementById('messages').innerHTML = '';
-        if (localStorage.getItem("token") !== null && ws === null){
-            $("#connect").click()
+        $("#submit").addClass("layui-btn-disabled")
+        if (isRunning) {
+            layer.msg("正在运行中...", {icon: 2});
+            return false;
         }
+        loadRunning = layer.load()
+
+        document.getElementById('messages').innerHTML = '';
         if (ws === null || ws.readyState === WebSocket.CLOSED) {
             layer.msg("未连接websocket", {icon: 2});
             return false;
@@ -247,11 +282,6 @@
         return false; // 阻止默认 form 跳转
     });
 
-
-    $("#submit").click(function () {
-        let json = $('#form').serialize();
-        layer.alert(json);
-    });
 
     // 退出登录
     $("#loginOut").click(function () {
