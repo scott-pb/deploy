@@ -246,18 +246,17 @@
 
     // 提交事件
     layui.form.on('submit(submit)', function (data) {
-        $("#submit").addClass("layui-btn-disabled")
         if (isRunning) {
             layer.msg("正在运行中...", {icon: 2});
             return false;
         }
         loadRunning = layer.load()
-
-        document.getElementById('messages').innerHTML = '';
         if (ws === null || ws.readyState === WebSocket.CLOSED) {
             layer.msg("未连接websocket", {icon: 2});
             return false;
         }
+        document.getElementById('messages').innerHTML = '';
+        $("#submit").addClass("layui-btn-disabled")
         let field = data.field; // 获取表单字段值
         field.restart = field.restart === "true"
         let itemsArray = [];
