@@ -66,6 +66,7 @@ func (w *WebSocket) WebSocketHandler(c *gin.Context) {
 	}()
 	// 处理WebSocket消息
 	for {
+		_ = ws.SetReadDeadline(time.Now().Add(time.Second * 30))
 		_, p, err := ws.ReadMessage()
 		if err != nil {
 			log.Error("ReadMessage err", err)

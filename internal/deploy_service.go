@@ -313,6 +313,7 @@ func (d *DeployService) ServerRelease(conn *websocket.Conn, msg Message) {
 func (d *DeployService) Flush(msg string, conn *websocket.Conn) {
 	mu.Lock()
 	defer mu.Unlock()
+	_ = conn.SetReadDeadline(time.Now().Add(time.Minute))
 	_ = conn.WriteMessage(websocket.TextMessage, []byte(msg))
 }
 
