@@ -55,6 +55,7 @@ func (w *WebSocket) WebSocketHandler(c *gin.Context) {
 	s := internal.DeployService{}
 
 	defer func() {
+		log.Error("ws Close", err)
 		_ = ws.Close()
 		if v, ok := mapWsMu[ws]; ok {
 			for _, mv := range v {
@@ -65,9 +66,9 @@ func (w *WebSocket) WebSocketHandler(c *gin.Context) {
 	}()
 	// 处理WebSocket消息
 	for {
-		_ = ws.SetReadDeadline(time.Now().Add(time.Second * 30))
 		_, p, err := ws.ReadMessage()
 		if err != nil {
+			log.Error("ReadMessage err", err)
 			break
 		}
 		if !isLogin {
