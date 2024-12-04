@@ -250,7 +250,6 @@
             layer.msg("正在运行中...", {icon: 2});
             return false;
         }
-        loadRunning = layer.load()
         if (ws === null || ws.readyState === WebSocket.CLOSED) {
             layer.msg("未连接websocket", {icon: 2});
             return false;
@@ -278,6 +277,7 @@
         } else {
             ws.send(JSON.stringify(field))
         }
+        loadRunning = layer.load();
         return false; // 阻止默认 form 跳转
     });
 
