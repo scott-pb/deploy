@@ -5,6 +5,28 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>soga 发布系统</title>
     <link rel="stylesheet" href="./layui/css/layui.css"> <!-- 引入layer.js的样式文件 -->
+    <style>
+        /* 样式定义 */
+        #scrollToTopBtn {
+            display: none; /* 默认隐藏 */
+            position: fixed; /* 固定位置 */
+            bottom: 20px; /* 距离底部20px */
+            right: 30px; /* 距离右侧30px */
+            z-index: 99; /* 确保在其他内容之上 */
+            border: none; /* 移除边框 */
+            outline: none; /* 移除轮廓线 */
+            background-color: #1e9fff; /* 按钮颜色 */
+            color: white; /* 文字颜色 */
+            cursor: pointer; /* 鼠标悬停样式 */
+            padding: 15px; /* 内边距 */
+            border-radius: 10px; /* 圆角 */
+            font-size: 18px; /* 字体大小 */
+        }
+
+        #scrollToTopBtn:hover {
+            background-color: #16baaa; /* 鼠标悬停时改变背景色 */
+        }
+    </style>
 </head>
 <body>
 
@@ -68,10 +90,12 @@
         </div>
     </div>
 </form>
+<!-- 悬浮按钮 -->
+<button id="scrollToTopBtn" title="Go to top">Top</button>
 <pre class="layui-code code-demo" id="messages" lay-options="{}">
 
 </pre>
-
+<div id="bottom"></div>
 </body>
 
 <script src="./layui/layui.js"></script> <!-- 引入layer.js文件 -->
@@ -85,6 +109,22 @@
     let loadIndex = null;
     let loadRunning = null;
     let isRunning = false;
+    // 当用户滚动页面超过一定距离时显示按钮，反之则隐藏
+    window.onscroll = function() {scrollFunction()};
+
+    function scrollFunction() {
+        let scrollToTopBtn = document.getElementById("scrollToTopBtn");
+        if (document.body.scrollTop > 20 || document.documentElement.scrollTop > 20) {
+            scrollToTopBtn.style.display = "block";
+        } else {
+            scrollToTopBtn.style.display = "none";
+        }
+    }
+
+    // 当点击按钮时平滑滚动到顶部
+    document.getElementById('scrollToTopBtn').addEventListener('click', function(){
+        window.scrollTo({top: 0, behavior: 'smooth'});
+    });
 
     function sendHeartbeat() {
         if (ws && ws.readyState === WebSocket.OPEN) {
@@ -165,6 +205,7 @@
             }
 
             document.getElementById('messages').innerHTML += data + "<br>";
+            location.href = '#bottom';
         };
 
         ws.onerror = function (error) {
