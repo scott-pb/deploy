@@ -596,6 +596,7 @@ func (d *DeployService) ScpUpload(conf config.Configure, binName, restartCmd str
 	defer func() {
 		_ = os.Chdir(dir)
 		if err != nil {
+			mu.Unlock()
 			dlog.Error(err, string(debug.Stack()))
 			d.Flush("服务器执行失败 💔💔💔"+err.Error(), conn)
 		} else {
