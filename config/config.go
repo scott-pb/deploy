@@ -8,16 +8,19 @@ import (
 var Config config
 
 type config struct {
-	Ip                string    `json:"ip" yaml:"ip"`
-	Port              string    `json:"port" yaml:"port"`
-	AdminTest         Configure `json:"admin_test" yaml:"admin_test"`
-	AdminRelease      Configure `json:"admin_release" yaml:"admin_release"`
-	EnterpriseTest    Configure `json:"im_enterprise_test" yaml:"im_enterprise_test"`
-	EnterpriseRelease Configure `json:"im_enterprise_release" yaml:"im_enterprise_release"`
-	ServerTest        Configure `json:"im_server_test" yaml:"im_server_test"`
-	ServerRelease     Configure `json:"im_server_release" yaml:"im_server_release"`
-	Accounts          []Account `json:"accounts" yaml:"accounts"`
-	Sessions          map[string]string
+	Ip                   string    `json:"ip" yaml:"ip"`
+	Port                 string    `json:"port" yaml:"port"`
+	AdminTest            Configure `json:"admin_test" yaml:"admin_test"`
+	AdminRelease         Configure `json:"admin_release" yaml:"admin_release"`
+	AdminProduction      Configure `json:"admin_production" yaml:"admin_production"`
+	EnterpriseTest       Configure `json:"im_enterprise_test" yaml:"im_enterprise_test"`
+	EnterpriseRelease    Configure `json:"im_enterprise_release" yaml:"im_enterprise_release"`
+	EnterpriseProduction Configure `json:"im_enterprise_production" yaml:"im_enterprise_production"`
+	ServerTest           Configure `json:"im_server_test" yaml:"im_server_test"`
+	ServerRelease        Configure `json:"im_server_release" yaml:"im_server_release"`
+	ServerProduction     Configure `json:"im_server_production" yaml:"im_server_production"`
+	Accounts             []Account `json:"accounts" yaml:"accounts"`
+	Sessions             map[string]string
 }
 
 type Configure struct {

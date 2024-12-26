@@ -44,6 +44,10 @@ func (w *WebSocket) WebSocketHandler(c *gin.Context) {
 		}
 	}
 
+	if !isLogin {
+		return
+	}
+
 	// 获取WebSocket连接
 	ws, err := upgrade.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
@@ -84,7 +88,11 @@ func (w *WebSocket) WebSocketHandler(c *gin.Context) {
 
 		var message internal.Message
 		_ = json.Unmarshal(p, &message)
+		message.UserName = username
 		key := message.Project + "_" + message.Env
+		if message.Env == constant.Production {
+			key = constant.Production
+		}
 		v, ok := mapMu[key]
 		if !ok {
 			v = &sync.Mutex{}
@@ -109,6 +117,11 @@ func (w *WebSocket) WebSocketHandler(c *gin.Context) {
 				delete(mapWsMu[ws], key)
 				fmt.Println("close==========")
 			}()
+			if message.Env == constant.Production {
+				s.ServerProduction(ws, message)
+				return
+			}
+
 			switch message.Project {
 			case constant.Admin:
 				switch message.Env {
@@ -138,7 +151,6 @@ func (w *WebSocket) WebSocketHandler(c *gin.Context) {
 				case constant.Release:
 					s.ServerRelease(ws, message)
 				}
-
 			}
 		}()
 	}

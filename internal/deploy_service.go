@@ -41,11 +41,12 @@ var (
 )
 
 type Message struct {
-	Env     string   `json:"env"`
-	Project string   `json:"project"`
-	Branch  string   `json:"branch"`
-	Restart bool     `json:"restart"`
-	Items   []string `json:"items"`
+	Env      string   `json:"env"`
+	Project  string   `json:"project"`
+	Branch   string   `json:"branch"`
+	Restart  bool     `json:"restart"`
+	UserName string   `json:"userName"`
+	Items    []string `json:"items"`
 }
 
 type newWriter struct {
@@ -71,7 +72,7 @@ func (d *DeployService) AdminTest(conn *websocket.Conn, msg Message) {
 	if err != nil {
 		d.Flush("Chdir err"+err.Error(), conn)
 	}
-	gitLog, err := d.Git(adminConf, msg.Branch, conn)
+	gitLog, err := d.Git(adminConf, msg.Branch, msg.UserName, conn)
 	if err != nil {
 		return
 	}
@@ -94,7 +95,7 @@ func (d *DeployService) AdminRelease(conn *websocket.Conn, msg Message) {
 		d.Flush("Chdir err"+err.Error(), conn)
 	}
 
-	gitLog, err := d.Git(adminConf, msg.Branch, conn)
+	gitLog, err := d.Git(adminConf, msg.Branch, msg.UserName, conn)
 	if err != nil {
 		return
 	}
@@ -114,7 +115,7 @@ func (d *DeployService) AdminRelease(conn *websocket.Conn, msg Message) {
 func (d *DeployService) EnterpriseTest(conn *websocket.Conn, msg Message) {
 	cfg := config.Config.EnterpriseTest
 
-	gitLog, err := d.Git(cfg, msg.Branch, conn)
+	gitLog, err := d.Git(cfg, msg.Branch, msg.UserName, conn)
 	if err != nil {
 		return
 	}
@@ -168,7 +169,7 @@ func (d *DeployService) EnterpriseTest(conn *websocket.Conn, msg Message) {
 func (d *DeployService) EnterpriseRelease(conn *websocket.Conn, msg Message) {
 	cfg := config.Config.EnterpriseRelease
 
-	gitLog, err := d.Git(cfg, msg.Branch, conn)
+	gitLog, err := d.Git(cfg, msg.Branch, msg.UserName, conn)
 	if err != nil {
 		return
 	}
@@ -248,7 +249,7 @@ func (d *DeployService) ServerTest(conn *websocket.Conn, msg Message) {
 		return
 	}
 
-	gitLog, err := d.Git(cfg, msg.Branch, conn)
+	gitLog, err := d.Git(cfg, msg.Branch, msg.UserName, conn)
 	if err != nil {
 		return
 	}
@@ -292,7 +293,7 @@ func (d *DeployService) ServerRelease(conn *websocket.Conn, msg Message) {
 		return
 	}
 
-	gitLog, err := d.Git(cfg, msg.Branch, conn)
+	gitLog, err := d.Git(cfg, msg.Branch, msg.UserName, conn)
 	if err != nil {
 		return
 	}
@@ -364,7 +365,7 @@ func (d *DeployService) GitLog(depth int) (str string, err error) {
 }
 
 // Git 拉取代码
-func (d *DeployService) Git(cfg config.Configure, branch string, conn *websocket.Conn) (log string, err error) {
+func (d *DeployService) Git(cfg config.Configure, branch, username string, conn *websocket.Conn) (log string, err error) {
 	d.Flush("git 开始拉取... 🚀🚀🚀", conn)
 	defer func() {
 		_ = os.Chdir(dir)
@@ -372,6 +373,7 @@ func (d *DeployService) Git(cfg config.Configure, branch string, conn *websocket
 			d.Flush("git 错误 💔💔💔"+err.Error(), conn)
 			dlog.Error(err, string(debug.Stack()))
 		} else {
+			d.Flush(log, conn)
 			dlog.Info("git Success 👌👌👌")
 			d.Flush("git Success 👌👌👌", conn)
 		}
@@ -402,6 +404,10 @@ func (d *DeployService) Git(cfg config.Configure, branch string, conn *websocket
 	}
 
 	if err = os.Chdir(cfg.ProjectName); err != nil {
+		return
+	}
+
+	if err = gitCmdFun(mw, "checkout", "."); err != nil {
 		return
 	}
 
@@ -445,7 +451,7 @@ func (d *DeployService) Git(cfg config.Configure, branch string, conn *websocket
 		return
 	}
 
-	return log + "【depends】:" + dLog, nil
+	return "🫵🫵🫵【打包人】:" + username + "🫵🫵🫵【git】" + log + "【depends】:" + dLog, nil
 }
 
 // Build 更新
@@ -479,8 +485,7 @@ func (d *DeployService) Build(cfg config.Configure, gitLog string, conn *websock
 	// 版本信息
 	version = "v" + time.Now().Format("20060102150405")
 	gitLog = strings.ReplaceAll(gitLog, "\n", ";")
-	gitLog = strings.ReplaceAll(gitLog, "\t", "-")
-	gitLog = strings.ReplaceAll(gitLog, " ", ",")
+
 	ldflags := fmt.Sprintf(`-ldflags=-X main.version=%s -X "main.gitInfo=%s"`, version, gitLog)
 
 	for _, build := range cfg.BuildConfigs {
@@ -737,4 +742,96 @@ func (d *DeployService) ScpUpload(conf config.Configure, binName, restartCmd str
 	}
 
 	return nil
+}
+
+func (d *DeployService) ServerProduction(conn *websocket.Conn, msg Message) {
+	adminConf := config.Config.AdminProduction
+	err := os.Chdir(dir)
+	if err != nil {
+		d.Flush("Chdir err"+err.Error(), conn)
+	}
+	gitLog, err := d.Git(adminConf, msg.Branch, msg.UserName, conn)
+	if err != nil {
+		return
+	}
+
+	if err = d.Build(adminConf, gitLog, conn); err != nil {
+		return
+	}
+
+	if err = d.ZipFiles(adminConf.ProjectPath, adminConf.ZipFilePath, []string{adminConf.BuildConfigs[0].BinName}, conn); err != nil {
+		return
+	}
+
+	unzipFiles := []string{adminConf.ProjectPath + "/" + adminConf.BuildConfigs[0].BinName}
+
+	_ = os.Chdir(dir)
+	enterprise := config.Config.EnterpriseProduction
+	gitLog, err = d.Git(enterprise, msg.Branch, msg.UserName, conn)
+	if err != nil {
+		return
+	}
+
+	if err = d.Build(enterprise, gitLog, conn); err != nil {
+		return
+	}
+	var files []string
+	var fileNames []string
+	var binNames []string
+	for _, bcfg := range enterprise.BuildConfigs {
+		files = append(files, bcfg.BinName)
+		fileNames = append(fileNames, bcfg.Name)
+		switch bcfg.Name {
+		case "soga_tool":
+			continue
+		case "soga_rpc_chat":
+			binNames = append(binNames, "soga_api_rpc_chat")
+		case "soga_rpc_game":
+			binNames = append(binNames, "soga_api_rpc_game")
+		case "soga_cron":
+		default:
+			binNames = append(binNames, bcfg.Name)
+		}
+		unzipFiles = append(unzipFiles, enterprise.ProjectPath+"/bin/"+bcfg.Name)
+	}
+
+	if err = d.ZipFiles(enterprise.ProjectPath, enterprise.ZipFilePath, files, conn); err != nil {
+		return
+	}
+
+	// server
+	_ = os.Chdir(dir)
+	server := config.Config.ServerRelease
+	files = make([]string, 0)
+	fileNames = make([]string, 0)
+	for _, bcfg := range server.BuildConfigs {
+		files = append(files, bcfg.BinName)
+		fileNames = append(fileNames, bcfg.Name)
+		unzipFiles = append(unzipFiles, server.ProjectPath+"/bin/"+bcfg.Name)
+	}
+
+	gitLog, err = d.Git(server, msg.Branch, msg.UserName, conn)
+	if err != nil {
+		return
+	}
+
+	if err = d.Build(server, gitLog, conn); err != nil {
+		return
+	}
+
+	if err = d.ZipFiles(server.ProjectPath, server.ZipFilePath, files, conn); err != nil {
+		return
+	}
+
+	_ = os.Chdir(dir)
+	path := "project/production/" + time.Now().Format(time.DateOnly)
+	if err = os.MkdirAll(path, fs.ModePerm); err != nil {
+		dlog.Error(err)
+		return
+	}
+
+	if err = d.ZipFiles(dir, path+"/production_"+time.Now().Format("150405")+".zip", unzipFiles, conn); err != nil {
+		return
+	}
+
 }

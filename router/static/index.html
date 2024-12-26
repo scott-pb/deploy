@@ -45,12 +45,13 @@
     <div class="layui-form-item">
         <label class="layui-form-label">环境</label>
         <div class="layui-input-block">
-            <input type="radio" name="env" value="test" title="test" checked>
-            <input type="radio" name="env" value="release" title="release">
+            <input type="radio" name="env" lay-filter="env-filter" value="test" title="test" checked>
+            <input type="radio" name="env" lay-filter="env-filter" value="release" title="release">
+            <input type="radio" name="env" lay-filter="env-filter" value="production" title="production">
         </div>
     </div>
 
-    <div class="layui-form-item layui-col-md6">
+    <div class="layui-form-item layui-col-md6" id="project">
         <label class="layui-form-label">项目</label>
         <div class="layui-input-block">
             <select name="project" lay-filter="select-project">
@@ -110,7 +111,10 @@
     let loadRunning = null;
     let isRunning = false;
     // 当用户滚动页面超过一定距离时显示按钮，反之则隐藏
-    window.onscroll = function() {scrollFunction()};
+    window.onscroll = function () {
+        scrollFunction()
+    };
+
 
     function scrollFunction() {
         let scrollToTopBtn = document.getElementById("scrollToTopBtn");
@@ -122,7 +126,7 @@
     }
 
     // 当点击按钮时平滑滚动到顶部
-    document.getElementById('scrollToTopBtn').addEventListener('click', function(){
+    document.getElementById('scrollToTopBtn').addEventListener('click', function () {
         window.scrollTo({top: 0, behavior: 'smooth'});
     });
 
@@ -285,6 +289,17 @@
         layui.form.render();
     });
 
+    layui.form.on('radio(env-filter)', function (data) {
+        let env = data.elem.value; // 获得 radio 值
+        if (env === "production") {
+            $("#restart").hide();
+            $("#project").hide();
+        } else {
+            $("#restart").show();
+            $("#project").show();
+        }
+    });
+
     // 提交事件
     layui.form.on('submit(submit)', function (data) {
         if (isRunning) {
@@ -295,6 +310,8 @@
             layer.msg("未连接websocket", {icon: 2});
             return false;
         }
+
+
         document.getElementById('messages').innerHTML = '';
         $("#submit").addClass("layui-btn-disabled")
         let field = data.field; // 获取表单字段值

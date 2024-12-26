@@ -7,4 +7,5 @@ const (
 	Front      = "front"
 	Test       = "test"
 	Release    = "release"
+	Production = "production"
 )
