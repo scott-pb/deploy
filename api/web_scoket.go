@@ -7,12 +7,13 @@ import (
 	"deploy/log"
 	"encoding/json"
 	"fmt"
-	"github.com/gin-gonic/gin"
-	"github.com/gorilla/websocket"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
 )
 
 type WebSocket struct {
@@ -44,10 +45,6 @@ func (w *WebSocket) WebSocketHandler(c *gin.Context) {
 		}
 	}
 
-	if !isLogin {
-		return
-	}
-
 	// 获取WebSocket连接
 	ws, err := upgrade.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
@@ -57,6 +54,11 @@ func (w *WebSocket) WebSocketHandler(c *gin.Context) {
 	clientIP := c.ClientIP()
 	fmt.Printf("Client IP: %s\n", clientIP)
 	s := internal.DeployService{}
+
+	if !isLogin {
+		s.Flush("no login", ws)
+		return
+	}
 
 	defer func() {
 		log.Error("ws Close", err)

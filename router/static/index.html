@@ -47,6 +47,31 @@
             font-size: 13px;
             border-radius: 4px;
             margin: 0;
+            transition: all 0.2s;
+        }
+
+        /* 连接按钮样式 */
+        .button-container .layui-bg-blue {
+            background-color: #409eff;
+        }
+
+        .button-container .layui-bg-blue:hover {
+            background-color: #66b1ff;
+        }
+
+        /* 断开按钮样式 */
+        .button-container .layui-bg-red {
+            background-color: #f56c6c;
+        }
+
+        .button-container .layui-bg-red:hover {
+            background-color: #f78989;
+        }
+
+        /* 按钮禁用状态 */
+        .button-container .layui-btn.layui-btn-disabled {
+            background-color: #a0cfff;
+            cursor: not-allowed;
         }
 
         /* 状态显示优化 */
@@ -453,7 +478,8 @@
     <div class="container">
         <div class="left-panel">
             <div class="button-container">
-                <button type="button" class="layui-btn layui-bg-red" id="disconnect">断开连接</button>
+                <button type="button" class="layui-btn layui-bg-blue" id="connect">连接</button>
+                <button type="button" class="layui-btn layui-bg-red" id="disconnect">断开</button>
             </div>
 
             <div id="status">
@@ -502,7 +528,7 @@
                         </div>
                     </div>
 
-                    <!-- 部署配��分组 -->
+                    <!-- 部署配置分组 -->
                     <div class="form-section">
                         <div class="layui-form-item" id="branch">
                             <label class="layui-form-label">分支</label>
@@ -548,6 +574,10 @@
         let loadRunning = null;
         let isRunning = false;
 
+        // 添加 WebSocket 状态检查和自动重连功能
+        let reconnectTimer = null;
+        let maxReconnectAttempts = 3;
+        let reconnectAttempts = 0;
 
         function sendHeartbeat() {
             if (ws && ws.readyState === WebSocket.OPEN) {
@@ -561,6 +591,38 @@
 
         function stopHeartbeat() {
             clearInterval(heartbeatInterval);
+        }
+
+        // 检查 WebSocket 连接状态
+        function checkWebSocketConnection() {
+            if (!ws || ws.readyState === WebSocket.CLOSED) {
+                // 如果未达到最大重试次数，尝试重新连接
+                if (reconnectAttempts < maxReconnectAttempts) {
+                    reconnectAttempts++;
+                    console.log(`WebSocket 断开，第 ${reconnectAttempts} 次重试连接...`);
+                    connectWebSocket();
+                } else {
+                    console.log('WebSocket 重连次数达到上限，停止重试');
+                    stopReconnectTimer();
+                }
+            } else {
+                // 连接正常，重置重试次数
+                reconnectAttempts = 0;
+            }
+        }
+
+        // 启��重连定时器
+        function startReconnectTimer() {
+            stopReconnectTimer();  // 先清除可能存在的定时器
+            reconnectTimer = setInterval(checkWebSocketConnection, 5000);  // 每5秒检查一次
+        }
+
+        // 停止重连定时器
+        function stopReconnectTimer() {
+            if (reconnectTimer) {
+                clearInterval(reconnectTimer);
+                reconnectTimer = null;
+            }
         }
 
         function connectWebSocket() {
@@ -586,7 +648,6 @@
                 return;
             }
 
-            // 显示连接中的加载动画
             let connectingIndex = layer.msg('正在连接...', {
                 icon: 16,
                 shade: 0.2,
@@ -600,8 +661,15 @@
                 layer.msg('连接成功', {icon: 1, time: 1500});
                 document.getElementById('status').innerHTML = '<span class="status-text status-connected">状态：连接成功</span>';
                 document.getElementById('messages').innerHTML = '';
+                
+                // 禁用连接按钮，启用断开按钮
+                $("#connect").addClass("layui-btn-disabled");
+                $("#disconnect").removeClass("layui-btn-disabled");
+                
                 startHeartbeat();
                 sendHeartbeat();
+                startReconnectTimer();
+                reconnectAttempts = 0;
             };
 
             ws.onmessage = function (event) {
@@ -677,16 +745,31 @@
                     layer.close(loadRunning);
                 }
                 console.log(event.code);
-                isRunning = false
+                isRunning = false;
                 let msg = event.code === 3008 ? '请先登录' : '连接关闭';
                 document.getElementById('status').innerHTML = '<span class="status-text">状态：' + msg + '</span>';
-                ws = null
+                ws = null;
                 stopHeartbeat();
+                
+                // 启用连接按钮，禁用断开按钮
+                $("#connect").removeClass("layui-btn-disabled");
+                $("#disconnect").addClass("layui-btn-disabled");
+                
+                if (event.code !== 1000) {
+                    startReconnectTimer();
+                }
+                
                 layer.msg(msg, {icon: 0});
             };
         }
 
-        $("#connect").click(connectWebSocket);
+        $("#connect").click(function() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                layer.msg('已经连接到WebSocket服务器', {icon: 1, time: 2000});
+                return;
+            }
+            connectWebSocket();
+        });
 
         $("#disconnect").click(function () {
             if (ws && ws.readyState === WebSocket.OPEN) {
@@ -694,7 +777,11 @@
                     icon: 16,
                     shade: 0.01
                 });
-                ws.close();
+                // 停止重连检查
+                stopReconnectTimer();
+                // 重置重试次数
+                reconnectAttempts = 0;
+                ws.close(1000);  // 使用正常关闭状态码
             } else {
                 layer.msg("未连接websocket", {icon: 0});
             }
@@ -785,7 +872,7 @@
             field.items = itemsArray;
 
             if (field.env === "release") {
-                let confirm = layer.confirm('发布release环境确定继续吗?', {
+                let confirm = layer.confirm('发布release环确定继续吗?', {
                     btn: ['确定', '关闭']
                 }, function () {
                     ws.send(JSON.stringify(field));
@@ -855,7 +942,11 @@
 
         // 页面载完成后检查登录状态
         $(document).ready(function() {
+            // 初始禁用断开按钮
+            $("#disconnect").addClass("layui-btn-disabled");
             checkLogin();
+            // 启动重连检查
+            startReconnectTimer();
         });
 
         // 添加消息到终端
