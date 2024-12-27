@@ -6,445 +6,883 @@
     <title>soga 发布系统</title>
     <link rel="stylesheet" href="./layui/css/layui.css"> <!-- 引入layer.js的样式文件 -->
     <style>
-        /* 样式定义 */
-        #scrollToTopBtn {
-            display: none; /* 默认隐藏 */
-            position: fixed; /* 固定位置 */
-            bottom: 20px; /* 距离底部20px */
-            right: 30px; /* 距离右侧30px */
-            z-index: 99; /* 确保在其他内容之上 */
-            border: none; /* 移除边框 */
-            outline: none; /* 移除轮廓线 */
-            background-color: #1e9fff; /* 按钮颜色 */
-            color: white; /* 文字颜色 */
-            cursor: pointer; /* 鼠标悬停样式 */
-            padding: 15px; /* 内边距 */
-            border-radius: 10px; /* 圆角 */
-            font-size: 18px; /* 字体大小 */
+        /* 基础样式 */
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #f5f7fa;
         }
 
-        #scrollToTopBtn:hover {
-            background-color: #16baaa; /* 鼠标悬停时改变背景色 */
+        .container {
+            display: flex;
+            min-height: 100vh;
+            flex-direction: row;
+        }
+
+        /* 左侧面板样式优化 */
+        .left-panel {
+            width: 320px;
+            padding: 0;
+            background-color: #fff;
+            box-shadow: 2px 0 8px rgba(0,0,0,0.05);
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 按钮容器样式优化 */
+        .button-container {
+            padding: 12px 16px;
+            background: #fff;
+            border-bottom: 1px solid #ebeef5;
+            display: flex;
+            gap: 8px;
+        }
+
+        .button-container .layui-btn {
+            flex: 1;
+            height: 32px;
+            line-height: 32px;
+            padding: 0 12px;
+            font-size: 13px;
+            border-radius: 4px;
+            margin: 0;
+        }
+
+        /* 状态显示优化 */
+        #status {
+            padding: 10px 16px;
+            border-bottom: 1px solid #ebeef5;
+            font-size: 13px;
+            color: #666;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        #status .status-text {
+            color: #ff5722;
+            font-weight: 500;
+        }
+
+        #status .status-connected {
+            color: #16b777;
+        }
+
+        /* 表单容器 */
+        .form-container {
+            padding: 16px;
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        /* 表单样式优化 */
+        .layui-form {
+            background-color: #fff;
+        }
+
+        /* 表单分组样式 */
+        .form-section {
+            position: relative;
+            margin-bottom: 20px;
+            background: #fff;
+            border-radius: 8px;
+        }
+
+        /* 表单项样式优化 */
+        .layui-form-item {
+            margin-bottom: 16px;
+            position: relative;
+            display: flex;
+            align-items: flex-start;
+        }
+
+        .layui-form-item:last-child {
+            margin-bottom: 0;
+        }
+
+        /* 标签样式优化 */
+        .layui-form-label {
+            width: auto;
+            padding: 9px 0;
+            font-size: 14px;
+            color: #333;
+            font-weight: normal;
+            text-align: left;
+            flex-shrink: 0;
+            line-height: 1.2;
+        }
+
+        /* 输入区域样式 */
+        .layui-input-block {
+            flex: 1;
+            margin-left: 12px;
+            min-height: unset;
+        }
+
+        /* 单选框组样式 */
+        .layui-input-block .layui-form-radio {
+            margin: 0 12px 0 0;
+            padding: 0;
+            height: 32px;
+            line-height: 32px;
+        }
+
+        .layui-form-radio span {
+            font-size: 13px;
+            color: #666;
+        }
+
+        .layui-form-radio i {
+            font-size: 16px;
+            color: #999;
+        }
+
+        /* 输入框样式 */
+        .layui-input {
+            height: 32px;
+            line-height: 32px;
+            padding: 0 12px;
+            font-size: 13px;
+            border: 1px solid #e4e7ed;
+            border-radius: 4px;
+            background-color: #f5f7fa;
+        }
+
+        .layui-input:hover, .layui-input:focus {
+            border-color: #409eff;
+            background-color: #fff;
+        }
+
+        /* 下拉框样式优化 */
+        .layui-form-select .layui-input {
+            background-color: #fff;
+            border: 1px solid #dcdfe6;
+            height: 32px;
+            line-height: 32px;
+            padding: 0 30px 0 12px;
+        }
+
+        .layui-form-select .layui-edge {
+            border-top-color: #c0c4cc;
+            right: 12px;
+        }
+
+        .layui-form-select dl {
+            top: 33px;
+            border-radius: 4px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+            padding: 4px 0;
+            background-color: #fff;
+            border: 1px solid #e4e7ed;
+        }
+
+        .layui-form-select dl dd {
+            height: 34px;
+            line-height: 34px;
+            padding: 0 12px;
+            color: #606266;
+        }
+
+        .layui-form-select dl dd:hover {
+            background-color: #f5f7fa;
+        }
+
+        .layui-form-select dl dd.layui-this {
+            background-color: #f5f7fa;
+            color: #409eff;
+            font-weight: 500;
+        }
+
+        /* 工程选项容器样式 */
+        .items-container {
+            margin-top: 8px;
+        }
+
+        /* 全选按钮样式 */
+        .items-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #ebeef5;
+        }
+
+        .items-header .select-all {
+            display: flex;
+            align-items: center;
+            padding: 6px 12px;
+            font-size: 13px;
+            color: #606266;
+            cursor: pointer;
+            margin-right: 16px;
+            transition: all 0.2s;
+        }
+
+        .items-header .select-all::before {
+            content: '';
+            width: 14px;
+            height: 14px;
+            border: 1px solid #dcdfe6;
+            border-radius: 2px;
+            margin-right: 8px;
+            transition: all 0.2s;
+        }
+
+        .items-header .select-all:hover::before {
+            border-color: #409eff;
+        }
+
+        /* 工程选项样式优化 */
+        #checkItems {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 12px;
+            padding: 4px;
+        }
+
+        #checkItems .layui-form-checkbox[lay-skin="tag"] {
+            margin: 0;
+            padding: 8px 12px;
+            height: auto;
+            background-color: #fff;
+            border: 1px solid #dcdfe6;
+            border-radius: 4px;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            color: #606266;
+            position: relative;
+            cursor: pointer;
+        }
+
+        #checkItems .layui-form-checkbox[lay-skin="tag"] span {
+            padding-left: 24px;
+            line-height: 1.4;
+            font-size: 13px;
+            background: none;
+            position: relative;
+        }
+
+        /* 自定义复选框样式 */
+        #checkItems .layui-form-checkbox[lay-skin="tag"] span::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 14px;
+            height: 14px;
+            border: 1px solid #dcdfe6;
+            border-radius: 2px;
+            background-color: #fff;
+            transition: all 0.2s;
+        }
+
+        #checkItems .layui-form-checkbox[lay-skin="tag"]:hover {
+            border-color: #409eff;
+        }
+
+        #checkItems .layui-form-checkbox[lay-skin="tag"]:hover span::before {
+            border-color: #409eff;
+        }
+
+        /* 选中状态样式 */
+        #checkItems .layui-form-checked[lay-skin="tag"] {
+            border-color: #e6f7ff;
+            background-color: #e6f7ff;
+        }
+
+        #checkItems .layui-form-checked[lay-skin="tag"] span {
+            color: #409eff;
+        }
+
+        #checkItems .layui-form-checked[lay-skin="tag"] span::before {
+            background-color: #409eff;
+            border-color: #409eff;
+        }
+
+        #checkItems .layui-form-checked[lay-skin="tag"] span::after {
+            content: '✓';
+            position: absolute;
+            left: 3px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #fff;
+            font-size: 12px;
+            line-height: 1;
+        }
+
+        #checkItems .layui-form-checked[lay-skin="tag"]:hover {
+            border-color: #e6f7ff;
+            background-color: #e6f7ff;
+        }
+
+        /* 提交按钮样式 */
+        .layui-form-item .layui-btn-fluid {
+            width: 100%;
+            height: 36px;
+            line-height: 36px;
+            background-color: #409eff;
+            border-radius: 4px;
+            font-size: 14px;
+            margin-top: 24px;
+        }
+
+        .layui-form-item .layui-btn-fluid:hover {
+            background-color: #66b1ff;
+        }
+
+        /* 右侧面板样式优化 */
+        .right-panel {
+            flex: 1;
+            padding: 20px;
+            background-color: #1e1e1e;
+            margin: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+            display: flex;
+            flex-direction: column;
+            position: sticky;
+            top: 20px;
+            height: calc(100vh - 40px);
+            overflow: hidden;
+        }
+
+        /* 终端输出框样式 */
+        #messages {
+            margin: 0;
+            padding: 16px;
+            background-color: #1e1e1e;
+            border: none;
+            border-radius: 4px;
+            font-family: 'JetBrains Mono', Monaco, Consolas, 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            color: #e0e0e0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            overflow-y: scroll;
+            flex: 1;
+            height: 100%;
+            scroll-behavior: smooth;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        /* 自定义滚动条样式 */
+        #messages::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        #messages::-webkit-scrollbar-track {
+            background: #2d2d2d;
+            border-radius: 4px;
+        }
+
+        #messages::-webkit-scrollbar-thumb {
+            background: #555;
+            border-radius: 4px;
+        }
+
+        #messages::-webkit-scrollbar-thumb:hover {
+            background: #666;
+        }
+
+        /* 终端文本颜色 */
+        #messages .success {
+            color: #98c379;
+        }
+
+        #messages .error {
+            color: #e06c75;
+        }
+
+        #messages .warning {
+            color: #e5c07b;
+        }
+
+        #messages .info {
+            color: #61afef;
+        }
+
+        /* 添加终端提示符样式 */
+        #messages .prompt {
+            color: #98c379;
+            margin-right: 8px;
+        }
+
+        /* 终端闪烁光标 */
+        @keyframes blink {
+            0% { opacity: 1; }
+            50% { opacity: 0; }
+            100% { opacity: 1; }
+        }
+
+        #messages::after {
+            content: '|';
+            color: #e0e0e0;
+            animation: blink 1s infinite;
+            margin-left: 2px;
+        }
+
+        /* 响应式优化 */
+        @media screen and (max-width: 768px) {
+            .container {
+                flex-direction: column;
+            }
+
+            .left-panel {
+                width: 100%;
+            }
+
+            .right-panel {
+                margin: 10px;
+            }
+
+            .layui-form-label {
+                width: auto;
+            }
+
+            .layui-input-block {
+                margin-left: 12px;
+            }
         }
     </style>
 </head>
 <body>
+    <div class="container">
+        <div class="left-panel">
+            <div class="button-container">
+                <button type="button" class="layui-btn layui-bg-blue" id="connect">连接</button>
+                <button type="button" class="layui-btn layui-bg-red" id="disconnect">断开</button>
+            </div>
 
-<div class="layui-btn-container " style="text-align: center;background-color:#16b777;padding-top: 10px">
-    <button type="button" class="layui-btn layui-bg-blue" id="connect">连接</button>
-    <button type="button" class="layui-btn layui-bg-red" id="disconnect">断开</button>
-    <button type="button" class="layui-btn layui-bg-purple" id="clear">清空</button>
-    <button type="button" class="layui-btn layui-bg-gray" id="openLoginBtn">登录</button>
-    <button type="button" class="layui-btn layui-bg-orange" id="loginOut">登出</button>
-</div>
+            <div id="status">
+                <span class="status-text">状态：未连接</span>
+            </div>
 
-<form class="layui-form" action="" id="form">
-    <div class="layui-form-item" id="status" style="text-align: right">
-        <span style="color: #ff5722;font-weight: bold;">状态：未连接</span>
-    </div>
-    <div class="layui-form-item">
-        <label class="layui-form-label">环境</label>
-        <div class="layui-input-block">
-            <input type="radio" name="env" lay-filter="env-filter" value="test" title="test" checked>
-            <input type="radio" name="env" lay-filter="env-filter" value="release" title="release">
-            <input type="radio" name="env" lay-filter="env-filter" value="production" title="production">
+            <div class="form-container">
+                <form class="layui-form" action="" id="form">
+                    <!-- 环境选择分组 -->
+                    <div class="form-section">
+                        <div class="layui-form-item">
+                            <label class="layui-form-label">环境</label>
+                            <div class="layui-input-block">
+                                <input type="radio" name="env" lay-filter="env-filter" value="test" title="test" checked>
+                                <input type="radio" name="env" lay-filter="env-filter" value="release" title="release">
+                                <input type="radio" name="env" lay-filter="env-filter" value="production" title="production">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 项目配置分组 -->
+                    <div class="form-section">
+                        <div class="layui-form-item" id="project">
+                            <label class="layui-form-label">项目</label>
+                            <div class="layui-input-block">
+                                <select name="project" lay-filter="select-project">
+                                    <option value="admin" selected>admin</option>
+                                    <option value="enterprise">enterprise</option>
+                                    <option value="server">server</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="layui-form-item" id="items" style="display: none">
+                            <label class="layui-form-label">工程</label>
+                            <div class="layui-input-block">
+                                <div class="items-container">
+                                    <div class="items-header">
+                                        <span class="select-all" id="selectAll">全选</span>
+                                        <span class="select-all" id="unselectAll">取消全选</span>
+                                    </div>
+                                    <div id="checkItems">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 部署配置分组 -->
+                    <div class="form-section">
+                        <div class="layui-form-item" id="branch">
+                            <label class="layui-form-label">分支</label>
+                            <div class="layui-input-block">
+                                <input type="text" name="branch" lay-verify="required" autocomplete="off" class="layui-input" value="dev">
+                            </div>
+                        </div>
+
+                        <div class="layui-form-item" id="restart">
+                            <label class="layui-form-label">重启</label>
+                            <div class="layui-input-block">
+                                <input type="radio" name="restart" value="true" title="true" checked>
+                                <input type="radio" name="restart" value="false" title="false">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 提交按钮 -->
+                    <div class="layui-form-item">
+                        <button type="submit" id="submit" class="layui-btn layui-btn-fluid" lay-submit lay-filter="submit">
+                            提交
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="right-panel">
+            <pre class="layui-code code-demo" id="messages" lay-options="{}">
+
+            </pre>
         </div>
     </div>
 
-    <div class="layui-form-item layui-col-md6" id="project">
-        <label class="layui-form-label">项目</label>
-        <div class="layui-input-block">
-            <select name="project" lay-filter="select-project">
-                <option value="admin" selected>admin</option>
-                <option value="enterprise">enterprise</option>
-                <option value="server">server</option>
-            </select>
-        </div>
-    </div>
-
-    <div class="layui-form-item" id="items" style="display: none">
-        <label class="layui-form-label">工程</label>
-        <div class="layui-input-block" id="checkItems">
-
-        </div>
-    </div>
-
-    <div class="layui-form-item" id="branch">
-        <label class="layui-form-label">分支</label>
-        <div class="layui-input-inline layui-input-wrap">
-            <input type="text" name="branch" lay-verify="required" autocomplete="off" class="layui-input"
-                   value="dev">
-        </div>
-    </div>
-
-    <div class="layui-form-item" id="restart">
-        <label class="layui-form-label">重启</label>
-        <div class="layui-input-block">
-            <input type="radio" name="restart" value="true" title="true" checked>
-            <input type="radio" name="restart" value="false" title="false">
-        </div>
-    </div>
-    <div class="layui-form-item">
-        <div>
-            <button type="submit" id="submit" class="layui-btn layui-btn-fluid" lay-submit lay-filter="submit">提交
-            </button>
-        </div>
-    </div>
-</form>
-<!-- 悬浮按钮 -->
-<button id="scrollToTopBtn" title="Go to top">Top</button>
-<pre class="layui-code code-demo" id="messages" lay-options="{}">
-
-</pre>
-<div id="bottom"></div>
-</body>
-
-<script src="./layui/layui.js"></script> <!-- 引入layer.js文件 -->
-<script src="./jquery/jquery.js"></script>
-<script type="application/javascript">
-    let loginOpen = null;
-    let ws = null;
-    let heartbeatInterval = null;
-    let loadCloseIndex = null;
-    let HOST = "{{.host}}";
-    let loadIndex = null;
-    let loadRunning = null;
-    let isRunning = false;
-    // 当用户滚动页面超过一定距离时显示按钮，反之则隐藏
-    window.onscroll = function () {
-        scrollFunction()
-    };
-
-
-    function scrollFunction() {
-        let scrollToTopBtn = document.getElementById("scrollToTopBtn");
-        if (document.body.scrollTop > 20 || document.documentElement.scrollTop > 20) {
-            scrollToTopBtn.style.display = "block";
-        } else {
-            scrollToTopBtn.style.display = "none";
-        }
-    }
-
-    // 当点击按钮时平滑滚动到顶部
-    document.getElementById('scrollToTopBtn').addEventListener('click', function () {
-        window.scrollTo({top: 0, behavior: 'smooth'});
-    });
-
-    function sendHeartbeat() {
-        if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send('ping');
-        }
-    }
-
-    function startHeartbeat(interval) {
-        heartbeatInterval = setInterval(sendHeartbeat, interval || 10000); // 默认间隔10秒
-    }
-
-    function stopHeartbeat() {
-        clearInterval(heartbeatInterval);
-    }
-
-    $("#connect").click(function () {
-        if (!window.WebSocket) {
-            layer.msg('您的浏览器不支持 WebSocket', {icon: 0});
-            return;
-        }
-
-        if (ws && ws.readyState === WebSocket.OPEN) {
-            layer.msg('已经连接到WebSocket服务器', {icon: 0});
-            return;
-        }
-
-        let token = localStorage.getItem("token");
-        if (token === "" || token == null) {
-            layer.msg('您还没有登录', {icon: 2});
-            return;
-        }
-
-        ws = new WebSocket('ws://' + HOST + '/webSocket?' + token);
-
-        ws.onopen = function () {
-            document.getElementById('status').innerHTML = '<span style="color: #16b777;font-weight: bold;">状态：连接成功</span>';
-            document.getElementById('messages').innerHTML = '';
-            startHeartbeat(); // 开始发送心跳
-            sendHeartbeat(); // 连接成功后立即发送一次心跳
+    <script src="./layui/layui.js"></script> <!-- 引入layer.js文件 -->
+    <script src="./jquery/jquery.js"></script>
+    <script type="application/javascript">
+        let loginOpen = null;
+        let ws = null;
+        let heartbeatInterval = null;
+        let loadCloseIndex = null;
+        let HOST = "{{.host}}";
+        let loadIndex = null;
+        let loadRunning = null;
+        let isRunning = false;
+        // 当用户页面超过一距离时显示按钮，反之则隐藏
+        window.onscroll = function () {
+            scrollFunction()
         };
 
-        ws.onmessage = function (event) {
-            let data = event.data
-            if (data.length === 0) {
-                return
+
+
+        function sendHeartbeat() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send('ping');
             }
-            if (data === "pong") {
-                return
+        }
+
+        function startHeartbeat(interval) {
+            heartbeatInterval = setInterval(sendHeartbeat, interval || 10000); // 默认间隔10秒
+        }
+
+        function stopHeartbeat() {
+            clearInterval(heartbeatInterval);
+        }
+
+        $("#connect").click(function () {
+            if (!window.WebSocket) {
+                layer.msg('您的浏览器不支持 WebSocket', {icon: 2, time: 2000});
+                return;
             }
 
-            if (data === "no login") {
-                document.getElementById('messages').innerHTML = '<span style="color: #ff5722;font-weight: bold; margin: 10% auto">请先登录!</span>';
-                ws.close(3008, "noLogin")
-                return
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                layer.msg('已经连接到WebSocket服务器', {icon: 1, time: 2000});
+                return;
             }
 
-            if (data.indexOf("运行中...") !== -1) {
-                if (loadIndex == null) {
-                    loadIndex = layer.msg(data, {
-                        icon: 16,
-                        shade: 0.01
+            let token = localStorage.getItem("token");
+            if (token === "" || token == null) {
+                layer.msg('您还没有登录', {
+                    icon: 2,
+                    time: 2000,
+                    shade: 0.3
+                }, function(){
+                    window.location.href = '/login';
+                });
+                return;
+            }
+
+            // 显示连接中的加载动画
+            let connectingIndex = layer.msg('正在连接...', {
+                icon: 16,
+                shade: 0.2,
+                time: 0
+            });
+
+            ws = new WebSocket('ws://' + HOST + '/webSocket?' + token);
+
+            ws.onopen = function () {
+                layer.close(connectingIndex);
+                layer.msg('连接成功', {icon: 1, time: 1500});
+                document.getElementById('status').innerHTML = '<span class="status-text status-connected">状态：连接成功</span>';
+                document.getElementById('messages').innerHTML = '';
+                scrollToBottom();
+                startHeartbeat();
+                sendHeartbeat();
+            };
+
+            ws.onmessage = function (event) {
+                let data = event.data;
+                if (data.length === 0) {
+                    return;
+                }
+                if (data === "pong") {
+                    return;
+                }
+
+                if (data === "no login") {
+                    layer.msg('登录已失效，请重新登录', {
+                        icon: 2,
+                        time: 2000,
+                        shade: 0.3
+                    }, function(){
+                        localStorage.removeItem("token");
+                        window.location.href = '/login';
+                    });
+                    ws.close(3008, "noLogin");
+                    return;
+                }
+
+                if (data.indexOf("运行中...") !== -1) {
+                    if (loadIndex == null) {
+                        loadIndex = layer.msg(data, {
+                            icon: 16,
+                            shade: 0.2,
+                            time: 0
+                        });
+                    }
+                    return;
+                }
+
+                if (loadIndex !== null) {
+                    layer.close(loadIndex);
+                }
+                if (loadRunning) {
+                    layer.close(loadRunning);
+                }
+
+                if (data === "finished") {
+                    isRunning = false;
+                    $("#submit").removeClass("layui-btn-disabled");
+                    return;
+                }
+
+                // 添加消息并自动滚动
+                const terminal = document.getElementById('messages');
+                terminal.innerHTML += data + "<br>";
+                
+                // 使用 requestAnimationFrame 确保平滑滚动
+                requestAnimationFrame(() => {
+                    terminal.scrollTop = terminal.scrollHeight;
+                });
+                
+                isRunning = true;
+            };
+
+            ws.onerror = function (error) {
+                console.log(error)
+                isRunning = false
+                if (loadRunning) {
+                    layer.close(loadRunning);
+                }
+                layer.msg('WebSocket 连接错误', {icon: 0});
+            };
+
+            ws.onclose = function (event) {
+                layer.close(loadCloseIndex);
+                if (loadRunning) {
+                    layer.close(loadRunning);
+                }
+                console.log(event.code);
+                isRunning = false
+                let msg = event.code === 3008 ? '请先登录' : '连接关闭';
+                document.getElementById('status').innerHTML = '<span class="status-text">状态：' + msg + '</span>';
+                ws = null
+                stopHeartbeat();
+                layer.msg(msg, {icon: 0});
+            };
+        });
+
+        $("#disconnect").click(function () {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                loadCloseIndex = layer.msg('关闭中', {
+                    icon: 16,
+                    shade: 0.01
+                });
+                ws.close();
+            } else {
+                layer.msg("未连接websocket", {icon: 0});
+            }
+        });
+
+        layui.form.on('select(select-project)', function (data) {
+            let items = [];
+            document.getElementById('checkItems').innerHTML = ''
+            $("#branch").show();
+            $("#restart").show();
+            switch (data.value) {
+                case "admin":
+                    $("#items").hide();
+                    break;
+                case "front":
+                    $("#items").hide();
+                    $("#branch").hide();
+                    $("#restart").hide();
+                    break;
+                case "enterprise":
+                    $("#items").show();
+                    items = ["soga_api_chat", "soga_api_chatroom", "soga_rpc_chat", "soga_rpc_game", "soga_cron", "soga_tool"];
+                    break;
+                case "server":
+                    $("#items").show();
+                    items = ["soga_im_api", "soga_im_msg_gateway", "soga_im_msg_transfer", "soga_im_push",
+                        "soga_im_rpc_auth", "soga_im_rpc_cache", "soga_im_rpc_conversation", "soga_im_rpc_friend",
+                        "soga_im_rpc_group", "soga_im_rpc_msg", "soga_im_rpc_office", "soga_im_rpc_organization",
+                        "soga_im_rpc_user"];
+                    break;
+            }
+            for (let i = 0; i < items.length; i++) {
+                document.getElementById('checkItems').innerHTML += '<input type="checkbox" name="items[' + i + ']" lay-skin="tag" title="' + items[i] + '" value="' + items[i] + '">';
+            }
+            layui.form.render();
+        });
+
+        // 添加全选和取消全选事件处理
+        $("#selectAll").click(function() {
+            $("#checkItems input[type='checkbox']").each(function() {
+                $(this).prop('checked', true);
+            });
+            layui.form.render();
+        });
+
+        $("#unselectAll").click(function() {
+            $("#checkItems input[type='checkbox']").each(function() {
+                $(this).prop('checked', false);
+            });
+            layui.form.render();
+        });
+
+        layui.form.on('radio(env-filter)', function (data) {
+            let env = data.elem.value; // 得 radio 值
+            if (env === "production") {
+                $("#restart").hide();
+                $("#project").hide();
+                $("#items").hide();
+            } else {
+                $("#restart").show();
+                $("#project").show();
+                $("#items").show();
+            }
+        });
+
+        // 修改提交事件处理
+        layui.form.on('submit(submit)', function (data) {
+            if (isRunning) {
+                layer.msg("正在运行中...", {icon: 2});
+                return false;
+            }
+
+            if (ws === null || ws.readyState === WebSocket.CLOSED) {
+                layer.msg("未连接websocket", {icon: 2});
+                return false;
+            }
+
+            document.getElementById('messages').innerHTML = '';
+            $("#submit").addClass("layui-btn-disabled");
+            let field = data.field;
+            field.restart = field.restart === "true";
+            let itemsArray = [];
+            for (let key in field) {
+                if (key.match(/items\[\d\]/)) {
+                    itemsArray.push(field[key]);
+                }
+            }
+            field.items = itemsArray;
+
+            if (field.env === "release") {
+                let confirm = layer.confirm('发布release环境确定继续吗?', {
+                    btn: ['确定', '关闭']
+                }, function () {
+                    ws.send(JSON.stringify(field));
+                    layer.close(confirm);
+                    loadRunning = layer.load();
+                });
+            } else {
+                ws.send(JSON.stringify(field));
+                loadRunning = layer.load();
+            }
+            return false;
+        });
+
+        // 检查登录状态
+        function checkLogin() {
+            let token = localStorage.getItem("token");
+            if (!token) {
+                layer.msg('未登录，即将跳转到登录页面...', {
+                    icon: 5,
+                    time: 1500,
+                    shade: 0.3
+                }, function(){
+                    window.location.href = '/login';
+                });
+                return false;
+            }
+            
+            let loadingIndex = layer.load(1, {
+                shade: [0.2,'#fff']
+            });
+            
+            // 验证 token 有效性
+            $.ajax({
+                url: 'http://' + HOST + '/check-token',
+                type: 'GET',
+                data: { token: token },
+                success: function(response) {
+                    layer.close(loadingIndex);
+                    if (response.status !== 200) {
+                        layer.msg('登录已失效，请重新登录', {
+                            icon: 2,
+                            time: 2000,
+                            shade: 0.3
+                        }, function(){
+                            localStorage.removeItem("token");
+                            window.location.href = '/login';
+                        });
+                    }
+                },
+                error: function() {
+                    layer.close(loadingIndex);
+                    layer.msg('验证登录状态失败，请重新登录', {
+                        icon: 2,
+                        time: 2000,
+                        shade: 0.3
+                    }, function(){
+                        localStorage.removeItem("token");
+                        window.location.href = '/login';
                     });
                 }
-                return;
-            }
-
-            if (loadIndex !== null) {
-                layer.close(loadIndex)
-            }
-            if (loadRunning) {
-                layer.close(loadRunning);
-            }
-            isRunning = true
-            if (data === "finished") {
-                isRunning = false;
-                $("#submit").removeClass("layui-btn-disabled")
-                return;
-            }
-
-            document.getElementById('messages').innerHTML += data + "<br>";
-            location.href = '#bottom';
-        };
-
-        ws.onerror = function (error) {
-            console.log(error)
-            isRunning = false
-            if (loadRunning) {
-                layer.close(loadRunning);
-            }
-            layer.msg('WebSocket 连接错误', {icon: 0});
-        };
-
-        ws.onclose = function (event) {
-            layer.close(loadCloseIndex);
-            if (loadRunning) {
-                layer.close(loadRunning);
-            }
-            console.log(event.code);
-            isRunning = false
-            let msg = '';
-            if (event.code === 3008) {
-                msg = '请先登录';
-            } else {
-                msg = '连接关闭';
-            }
-            document.getElementById('status').innerHTML = '<span style="color: #ff5722;font-weight: bold;">状态：' + msg + '</span>';
-            ws = null
-            stopHeartbeat();
-            layer.msg(msg, {icon: 0});
-        };
-    });
-
-    $("#clear").click(function () {
-        document.getElementById('messages').innerHTML = '';
-    })
-
-    $('#disconnect').click(function () {
-        if (ws && ws.readyState === WebSocket.OPEN) {
-            loadCloseIndex = layer.msg('关闭中', {
-                icon: 16,
-                shade: 0.01
             });
-            ws.close();
-        } else {
-            layer.msg("未连接websocket", {icon: 0});
-        }
-    });
-
-    layui.form.on('select(select-project)', function (data) {
-        let items = [];
-        document.getElementById('checkItems').innerHTML = ''
-        $("#branch").show();
-        $("#restart").show();
-        switch (data.value) {
-            case "admin":
-                $("#items").hide();
-                break;
-            case "front":
-                $("#items").hide();
-                $("#branch").hide();
-                $("#restart").hide();
-                break;
-            case "enterprise":
-                $("#items").show();
-                items = ["soga_api_chat", "soga_api_chatroom", "soga_rpc_chat", "soga_rpc_game", "soga_cron", "soga_tool"];
-                break;
-            case "server":
-                $("#items").show();
-                items = ["soga_im_api", "soga_im_msg_gateway", "soga_im_msg_transfer", "soga_im_push",
-                    "soga_im_rpc_auth", "soga_im_rpc_cache", "soga_im_rpc_conversation", "soga_im_rpc_friend",
-                    "soga_im_rpc_group", "soga_im_rpc_msg", "soga_im_rpc_office", "soga_im_rpc_organization",
-                    "soga_im_rpc_user"];
-                break;
-        }
-        for (let i = 0; i < items.length; i++) {
-            document.getElementById('checkItems').innerHTML += '<input type="checkbox" name="items[' + i + ']" lay-skin="tag" title="' + items[i] + '" value="' + items[i] + '">';
-        }
-        layui.form.render();
-    });
-
-    layui.form.on('radio(env-filter)', function (data) {
-        let env = data.elem.value; // 获得 radio 值
-        if (env === "production") {
-            $("#restart").hide();
-            $("#project").hide();
-        } else {
-            $("#restart").show();
-            $("#project").show();
-        }
-    });
-
-    // 提交事件
-    layui.form.on('submit(submit)', function (data) {
-        if (isRunning) {
-            layer.msg("正在运行中...", {icon: 2});
-            return false;
-        }
-        if (ws === null || ws.readyState === WebSocket.CLOSED) {
-            layer.msg("未连接websocket", {icon: 2});
-            return false;
+            return true;
         }
 
-
-        document.getElementById('messages').innerHTML = '';
-        $("#submit").addClass("layui-btn-disabled")
-        let field = data.field; // 获取表单字段值
-        field.restart = field.restart === "true"
-        let itemsArray = [];
-        for (let key in field) {
-            if (key.match(/items\[\d\]/)) {
-                itemsArray.push(field[key])
-            }
-        }
-        field.items = itemsArray
-
-        // 显示填写结果，仅作演示用
-        if (field.env === "release") {
-            let confirm = layer.confirm('发布release环境确定继续吗?', {
-                btn: ['确定', '关闭'] //按钮
-            }, function () {
-                ws.send(JSON.stringify(field))
-                layer.close(confirm)
-                loadRunning = layer.load();
-            });
-        } else {
-            ws.send(JSON.stringify(field))
-            loadRunning = layer.load();
-        }
-        return false; // 阻止默认 form 跳转
-    });
-
-
-    // 退出登录
-    $("#loginOut").click(function () {
-        let token = localStorage.getItem("token");
-        if (token == null) {
-            layer.msg('您还没有登录', {icon: 0}, function () {
-            });
-            return;
-        }
-        let confirm = layer.confirm('确定登出?', {
-            btn: ['确定', '关闭'] //按钮
-        }, function () {
-            localStorage.removeItem("token");
-            layer.close(confirm)
-            ws.close()
-        });
-    });
-
-
-    // 登录弹窗
-    $("#openLoginBtn").click(function () {
-        let token = localStorage.getItem("token");
-        let content = '<form class="layui-form">\n' +
-            '    <div class="demo-login-container">\n' +
-            '        <div class="layui-form-item">\n' +
-            '            <div class="layui-input-wrap">\n' +
-            '                <div class="layui-input-prefix">\n' +
-            '                    <i class="layui-icon layui-icon-username"></i>\n' +
-            '                </div>\n' +
-            '                <input type="text" name="username" value="" lay-verify="required" placeholder="用户名" lay-reqtext="请填写用户名" autocomplete="off" class="layui-input" lay-affix="clear">\n' +
-            '            </div>\n' +
-            '        </div>\n' +
-            '        <div class="layui-form-item">\n' +
-            '            <div class="layui-input-wrap">\n' +
-            '                <div class="layui-input-prefix">\n' +
-            '                    <i class="layui-icon layui-icon-password"></i>\n' +
-            '                </div>\n' +
-            '                <input type="password" name="password" value="" lay-verify="required" placeholder="密   码" lay-reqtext="请填写密码" autocomplete="off" class="layui-input" lay-affix="eye">\n' +
-            '            </div>\n' +
-            '        </div>\n' +
-            '        <div class="layui-form-item">\n' +
-            '            <button class="layui-btn layui-btn-fluid" lay-submit lay-filter="login">登录</button>\n' +
-            '        </div>\n' +
-            '    </div>\n' +
-            '</form>'
-        if (token != null) {
-            layer.confirm('确定重新登录?', {
-                btn: ['确定', '关闭'] //按钮
-            }, function () {
-                loginOpen = layer.open({
-                    type: 1, // page 层类型
-                    title: '登录',
-                    shade: 0.6, // 遮罩透明度
-                    shadeClose: true, // 点击遮罩区域，关闭弹层
-                    maxmin: true, // 允许全屏最小化
-                    anim: 1, // 0-6 的动画形式，-1 不开启
-                    content: content
-                });
-            });
-        } else {
-            loginOpen = layer.open({
-                type: 1, // page 层类型
-                title: '登录',
-                shade: 0.6, // 遮罩透明度
-                shadeClose: true, // 点击遮罩区域，关闭弹层
-                maxmin: true, // 允许全屏最小化
-                anim: 1, // 0-6 的动画形式，-1 不开启
-                content: content
-            });
-        }
-    });
-
-    // 登录提交事件
-    layui.form.on('submit(login)', function (data) {
-        let field = data.field; // 获取表单字段值
-        let loadIndex = layer.msg('登录中', {
-            icon: 16,
-            shade: 0.01
-        });
-        $.ajax({
-            url: 'http://' + HOST + '/login',
-            type: 'POST',
-            data: JSON.stringify(field),
-            dataType: "json",
-            contentType: "application/json",
-            success: function (response) {
-                if (response.status === 200) {
-                    localStorage.setItem("token", response.token)
-                    layer.close(loginOpen)
-                    $("#connect").click()
-                    layer.msg("登录成功")
-                } else {
-                    layer.alert(response.message)
-                }
-                layer.close(loadIndex)
-            },
-            error: function (error) {
-                // 错误回调函数，处理请求失败的情况
-                console.log(error)
-                layer.msg("登录失败")
-                layer.close(loadIndex)
-            }
+        // 页面��载完成后检查登录状态
+        $(document).ready(function() {
+            checkLogin();
         });
 
-        return false; // 阻止默认 form 跳转
-    });
-</script>
+        // 添加消息到终端
+        function appendMessage(message, type = 'info') {
+            const terminal = document.getElementById('messages');
+            const timestamp = new Date().toLocaleTimeString();
+            const messageHtml = `<span class="prompt">[${timestamp}]</span><span class="${type}">${message}</span>\n`;
+            
+            // 直接添加消息并滚动
+            terminal.innerHTML += messageHtml;
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+
+        // 添加手动滚动到底部的函数
+        function scrollToBottom() {
+            const terminal = document.getElementById('messages');
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+
+        // 清空消息时的处理
+        $("#clear").click(function () {
+            document.getElementById('messages').innerHTML = '';
+        });
+    </script>
+</body>
 </html>

@@ -6,13 +6,15 @@ import (
 	"deploy/log"
 	"embed"
 	"fmt"
-	"github.com/gin-gonic/gin"
 	"html/template"
 	"io"
 	"io/fs"
 	"math/rand"
 	"net"
 	"net/http"
+	"strings"
+
+	"github.com/gin-gonic/gin"
 )
 
 //go:embed  static
@@ -45,7 +47,11 @@ func InitRouter() {
 	})
 
 	r.POST("/login", login)
+	r.GET("/check-token", checkToken)
 	r.GET("/webSocket", (&api.WebSocket{}).WebSocketHandler)
+	r.GET("/login", func(c *gin.Context) {
+		c.HTML(http.StatusOK, "login.html", gin.H{"host": ip + ":" + config.Config.Port})
+	})
 	staticFp, _ := fs.Sub(front, "static")
 	r.NoRoute(gin.WrapH(http.FileServer(http.FS(staticFp))))
 	//r.StaticFS("/public", http.FS(front))
@@ -91,6 +97,41 @@ func login(c *gin.Context) {
 		"status":  http.StatusOK,
 		"token":   account.Username + "-" + id,
 		"message": "登录成功",
+	})
+}
+
+func checkToken(c *gin.Context) {
+	token := c.Query("token")
+	if token == "" {
+		c.JSON(http.StatusOK, gin.H{
+			"status":  http.StatusUnauthorized,
+			"message": "未登录",
+		})
+		return
+	}
+
+	// 解析 token
+	parts := strings.Split(token, "-")
+	if len(parts) != 2 {
+		c.JSON(http.StatusOK, gin.H{
+			"status":  http.StatusUnauthorized,
+			"message": "无效的token",
+		})
+		return
+	}
+
+	username, id := parts[0], parts[1]
+	if storedID, exists := config.Config.Sessions[username]; !exists || storedID != id {
+		c.JSON(http.StatusOK, gin.H{
+			"status":  http.StatusUnauthorized,
+			"message": "token已失效",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":  http.StatusOK,
+		"message": "token有效",
 	})
 }
 

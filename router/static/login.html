@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录 - soga 发布系统</title>
+    <link rel="stylesheet" href="./layui/css/layui.css">
+    <style>
+        .login-container {
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #f2f2f2;
+        }
+        .login-box {
+            width: 350px;
+            padding: 30px;
+            background-color: #fff;
+            border-radius: 4px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .login-title {
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 24px;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-box">
+            <h2 class="login-title">soga 发布系统</h2>
+            <form class="layui-form">
+                <div class="layui-form-item">
+                    <div class="layui-input-wrap">
+                        <div class="layui-input-prefix">
+                            <i class="layui-icon layui-icon-username"></i>
+                        </div>
+                        <input type="text" name="username" value="" lay-verify="required" placeholder="用户名" lay-reqtext="请填写用户名" autocomplete="off" class="layui-input" lay-affix="clear">
+                    </div>
+                </div>
+                <div class="layui-form-item">
+                    <div class="layui-input-wrap">
+                        <div class="layui-input-prefix">
+                            <i class="layui-icon layui-icon-password"></i>
+                        </div>
+                        <input type="password" name="password" value="" lay-verify="required" placeholder="密码" lay-reqtext="请填写密码" autocomplete="off" class="layui-input" lay-affix="eye">
+                    </div>
+                </div>
+                <div class="layui-form-item">
+                    <button class="layui-btn layui-btn-fluid" lay-submit lay-filter="login">登录</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="./layui/layui.js"></script>
+    <script src="./jquery/jquery.js"></script>
+    <script>
+        let HOST = "{{.host}}";
+        
+        // 修改token检查逻辑
+        let token = localStorage.getItem("token");
+        if (token) {
+            // 添加token验证请求
+            $.ajax({
+                url: 'http://' + HOST + '/verify-token',  // 需要后端提供验证token的接口
+                type: 'GET',
+                headers: {
+                    'Authorization': 'Bearer ' + token
+                },
+                success: function(response) {
+                    if (response.status === 200) {
+                        window.location.href = '/';
+                    } else {
+                        localStorage.removeItem("token");  // token无效则删除
+                    }
+                },
+                error: function() {
+                    localStorage.removeItem("token");  // 请求失败则删除token
+                }
+            });
+        }
+
+        // 登录提交事件
+        layui.form.on('submit(login)', function(data) {
+            let field = data.field;
+            let loadIndex = layer.msg('登录中', {
+                icon: 16,
+                shade: 0.01
+            });
+
+            $.ajax({
+                url: 'http://' + HOST + '/login',
+                type: 'POST',
+                data: JSON.stringify(field),
+                dataType: "json",
+                contentType: "application/json",
+                success: function(response) {
+                    if (response.status === 200) {
+                        localStorage.setItem("token", response.token);
+                        window.location.href = '/';
+                    } else {
+                        layer.alert(response.message);
+                    }
+                    layer.close(loadIndex);
+                },
+                error: function(error) {
+                    console.log(error);
+                    layer.msg("登录失败");
+                    layer.close(loadIndex);
+                }
+            });
+
+            return false;
+        });
+    </script>
+</body>
+</html> 
