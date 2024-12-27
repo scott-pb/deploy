@@ -204,6 +204,7 @@ func (d *DeployService) EnterpriseRelease(conn *websocket.Conn, msg Message) {
 		case "soga_rpc_game":
 			binNames = append(binNames, "soga_api_rpc_game")
 		case "soga_cron":
+			binNames = append(binNames, "soga_im_cron")
 			restartCmd = "mv /root/soga_im_enterprise/bin/soga_cron /root/soga_im_cron/ && mv /root/soga_im_cron/soga_cron /root/soga_im_cron/soga_im_cron && "
 		default:
 			binNames = append(binNames, bcfg.Name)

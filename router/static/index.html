@@ -338,7 +338,6 @@
             flex: 1;
             padding: 20px;
             background-color: #1e1e1e;
-            margin: 20px;
             border-radius: 8px;
             box-shadow: 0 2px 12px rgba(0,0,0,0.15);
             display: flex;
@@ -454,8 +453,7 @@
     <div class="container">
         <div class="left-panel">
             <div class="button-container">
-                <button type="button" class="layui-btn layui-bg-blue" id="connect">连接</button>
-                <button type="button" class="layui-btn layui-bg-red" id="disconnect">断开</button>
+                <button type="button" class="layui-btn layui-bg-red" id="disconnect">断开连接</button>
             </div>
 
             <div id="status">
@@ -504,7 +502,7 @@
                         </div>
                     </div>
 
-                    <!-- 部署配置分组 -->
+                    <!-- 部署配��分组 -->
                     <div class="form-section">
                         <div class="layui-form-item" id="branch">
                             <label class="layui-form-label">分支</label>
@@ -542,7 +540,6 @@
     <script src="./layui/layui.js"></script> <!-- 引入layer.js文件 -->
     <script src="./jquery/jquery.js"></script>
     <script type="application/javascript">
-        let loginOpen = null;
         let ws = null;
         let heartbeatInterval = null;
         let loadCloseIndex = null;
@@ -550,11 +547,6 @@
         let loadIndex = null;
         let loadRunning = null;
         let isRunning = false;
-        // 当用户页面超过一距离时显示按钮，反之则隐藏
-        window.onscroll = function () {
-            scrollFunction()
-        };
-
 
 
         function sendHeartbeat() {
@@ -571,7 +563,7 @@
             clearInterval(heartbeatInterval);
         }
 
-        $("#connect").click(function () {
+        function connectWebSocket() {
             if (!window.WebSocket) {
                 layer.msg('您的浏览器不支持 WebSocket', {icon: 2, time: 2000});
                 return;
@@ -583,7 +575,7 @@
             }
 
             let token = localStorage.getItem("token");
-            if (token === "" || token == null) {
+            if (!token) {
                 layer.msg('您还没有登录', {
                     icon: 2,
                     time: 2000,
@@ -608,7 +600,6 @@
                 layer.msg('连接成功', {icon: 1, time: 1500});
                 document.getElementById('status').innerHTML = '<span class="status-text status-connected">状态：连接成功</span>';
                 document.getElementById('messages').innerHTML = '';
-                scrollToBottom();
                 startHeartbeat();
                 sendHeartbeat();
             };
@@ -693,7 +684,9 @@
                 stopHeartbeat();
                 layer.msg(msg, {icon: 0});
             };
-        });
+        }
+
+        $("#connect").click(connectWebSocket);
 
         $("#disconnect").click(function () {
             if (ws && ws.readyState === WebSocket.OPEN) {
@@ -763,7 +756,6 @@
             } else {
                 $("#restart").show();
                 $("#project").show();
-                $("#items").show();
             }
         });
 
@@ -785,7 +777,8 @@
             field.restart = field.restart === "true";
             let itemsArray = [];
             for (let key in field) {
-                if (key.match(/items\[\d\]/)) {
+
+                if (key.match(/items\[\d{1,2}\]/)) {
                     itemsArray.push(field[key]);
                 }
             }
@@ -806,7 +799,7 @@
             return false;
         });
 
-        // 检查登录状态
+        // 修改检查登录状态的函数，添加自动连接功能
         function checkLogin() {
             let token = localStorage.getItem("token");
             if (!token) {
@@ -831,7 +824,10 @@
                 data: { token: token },
                 success: function(response) {
                     layer.close(loadingIndex);
-                    if (response.status !== 200) {
+                    if (response.status === 200) {
+                        // Token 有效，自动连接 WebSocket
+                        connectWebSocket();
+                    } else {
                         layer.msg('登录已失效，请重新登录', {
                             icon: 2,
                             time: 2000,
@@ -857,7 +853,7 @@
             return true;
         }
 
-        // 页面��载完成后检查登录状态
+        // 页面载完成后检查登录状态
         $(document).ready(function() {
             checkLogin();
         });
