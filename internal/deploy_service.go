@@ -219,7 +219,7 @@ func (d *DeployService) EnterpriseRelease(conn *websocket.Conn, msg Message) {
 		return
 	}
 
-	_ = d.ScpUpload(cfg, strings.Join(fileNames, " "), restartCmd+"pm2 restart "+strings.Join(binNames, " "), msg.Restart, conn)
+	_ = d.ScpUpload(cfg, strings.Join(fileNames, " "), restartCmd+"supervisorctl restart "+strings.Join(binNames, " "), msg.Restart, conn)
 
 	return
 }
