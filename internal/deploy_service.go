@@ -386,11 +386,13 @@ func (d *DeployService) Git(cfg config.Configure, branch, username string, conn 
 	}
 
 	_ = os.Chdir(cfg.ProjectPath)
+	d.Flush("cd "+cfg.ProjectPath, conn)
 	mu.Lock()
 	defer mu.Unlock()
 	mw, _ := conn.NextWriter(websocket.TextMessage)
 
 	gitCmdFun := func(w io.Writer, arg ...string) (err error) {
+		go d.Flush("git "+strings.Join(arg, " "), conn)
 		cmd := exec.Command("git", arg...)
 		cmd.Stdout = w
 		cmd.Stderr = w
@@ -416,7 +418,7 @@ func (d *DeployService) Git(cfg config.Configure, branch, username string, conn 
 		return
 	}
 
-	if err = gitCmdFun(mw, "checkout", branch); err != nil {
+	if err = gitCmdFun(mw, "checkout", "origin/"+branch); err != nil {
 		return
 	}
 
@@ -439,7 +441,7 @@ func (d *DeployService) Git(cfg config.Configure, branch, username string, conn 
 		return
 	}
 
-	if err = gitCmdFun(mw, "checkout", branch); err != nil {
+	if err = gitCmdFun(mw, "checkout", "origin/"+branch); err != nil {
 		return
 	}
 
@@ -751,6 +753,7 @@ func (d *DeployService) ServerProduction(conn *websocket.Conn, msg Message) {
 	if err != nil {
 		d.Flush("Chdir err"+err.Error(), conn)
 	}
+	d.Flush("cd "+dir, conn)
 	gitLog, err := d.Git(adminConf, msg.Branch, msg.UserName, conn)
 	if err != nil {
 		return
@@ -767,6 +770,7 @@ func (d *DeployService) ServerProduction(conn *websocket.Conn, msg Message) {
 	unzipFiles := []string{adminConf.ProjectPath + "/" + adminConf.BuildConfigs[0].BinName}
 
 	_ = os.Chdir(dir)
+	d.Flush("cd "+dir, conn)
 	enterprise := config.Config.EnterpriseProduction
 	gitLog, err = d.Git(enterprise, msg.Branch, msg.UserName, conn)
 	if err != nil {
@@ -802,7 +806,8 @@ func (d *DeployService) ServerProduction(conn *websocket.Conn, msg Message) {
 
 	// server
 	_ = os.Chdir(dir)
-	server := config.Config.ServerRelease
+	d.Flush("cd "+dir, conn)
+	server := config.Config.ServerProduction
 	files = make([]string, 0)
 	fileNames = make([]string, 0)
 	for _, bcfg := range server.BuildConfigs {
