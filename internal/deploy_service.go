@@ -18,6 +18,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -354,6 +355,16 @@ func (d *DeployService) GitLog(depth int) (str string, err error) {
 	if err != nil {
 		return
 	}
+	pattern := `Merge branch '(.*)' into (.*)`
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		fmt.Println("Error compiling regex:", err)
+		return
+	}
+	if len(re.FindSubmatch(gLog)) > 0 && depth == 1 {
+		return d.GitLog(depth + 1)
+	}
+
 	if strings.Index(string(gLog), "Merge remote-tracking branch") == -1 {
 		return string(gLog), nil
 	} else {
