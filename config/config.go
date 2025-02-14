@@ -8,19 +8,30 @@ import (
 var Config config
 
 type config struct {
-	Ip                   string    `json:"ip" yaml:"ip"`
-	Port                 string    `json:"port" yaml:"port"`
-	AdminTest            Configure `json:"admin_test" yaml:"admin_test"`
-	AdminRelease         Configure `json:"admin_release" yaml:"admin_release"`
-	AdminProduction      Configure `json:"admin_production" yaml:"admin_production"`
-	EnterpriseTest       Configure `json:"im_enterprise_test" yaml:"im_enterprise_test"`
-	EnterpriseRelease    Configure `json:"im_enterprise_release" yaml:"im_enterprise_release"`
-	EnterpriseProduction Configure `json:"im_enterprise_production" yaml:"im_enterprise_production"`
-	ServerTest           Configure `json:"im_server_test" yaml:"im_server_test"`
-	ServerRelease        Configure `json:"im_server_release" yaml:"im_server_release"`
-	ServerProduction     Configure `json:"im_server_production" yaml:"im_server_production"`
-	Accounts             []Account `json:"accounts" yaml:"accounts"`
+	Ip                   string           `json:"ip" yaml:"ip"`
+	Port                 string           `json:"port" yaml:"port"`
+	AdminTest            Configure        `json:"admin_test" yaml:"admin_test"`
+	AdminRelease         Configure        `json:"admin_release" yaml:"admin_release"`
+	AdminProduction      Configure        `json:"admin_production" yaml:"admin_production"`
+	EnterpriseTest       Configure        `json:"im_enterprise_test" yaml:"im_enterprise_test"`
+	EnterpriseRelease    Configure        `json:"im_enterprise_release" yaml:"im_enterprise_release"`
+	EnterpriseProduction Configure        `json:"im_enterprise_production" yaml:"im_enterprise_production"`
+	ServerTest           Configure        `json:"im_server_test" yaml:"im_server_test"`
+	ServerRelease        Configure        `json:"im_server_release" yaml:"im_server_release"`
+	ServerProduction     Configure        `json:"im_server_production" yaml:"im_server_production"`
+	AdminUI              AdminUiConfigure `json:"admin_ui" yaml:"admin_ui"`
+	Accounts             []Account        `json:"accounts" yaml:"accounts"`
 	Sessions             map[string]string
+}
+
+type AdminUiConfigure struct {
+	ProjectConfig       `json:"project_config" yaml:"project_config"`
+	GitConfig           `json:"git_config" yaml:"git_config"`
+	TestClientConfig    ClientConfig `json:"test_client_config" yaml:"test_client_config"`
+	ReleaseClientConfig ClientConfig `json:"release_client_config" yaml:"release_client_config"`
+	TestServerPath      string       `json:"test_server_path" yaml:"test_server_path"`
+	ReleaseServerPath   string       `json:"release_server_path" yaml:"release_server_path"`
+	ZipName             string       `json:"zip_name" yaml:"zip_name"`
 }
 
 type Configure struct {

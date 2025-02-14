@@ -509,6 +509,7 @@
                                     <option value="admin" selected>admin</option>
                                     <option value="enterprise">enterprise</option>
                                     <option value="server">server</option>
+                                    <option value="adminUI">adminUI</option>
                                 </select>
                             </div>
                         </div>
@@ -794,6 +795,9 @@
             $("#restart").show();
             switch (data.value) {
                 case "admin":
+                    $("#items").hide();
+                    break;
+                case "adminUI":
                     $("#items").hide();
                     break;
                 case "front":

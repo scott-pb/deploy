@@ -4,7 +4,7 @@ const (
 	Admin      = "admin"
 	Enterprise = "enterprise"
 	Server     = "server"
-	Front      = "front"
+	AdminUI    = "adminUI"
 	Test       = "test"
 	Release    = "release"
 	Production = "production"

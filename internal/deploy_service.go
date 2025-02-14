@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"deploy/config"
+	"deploy/constant"
 	dlog "deploy/log"
 	"errors"
 	"fmt"
@@ -850,5 +851,245 @@ func (d *DeployService) ServerProduction(conn *websocket.Conn, msg Message) {
 	if err = d.ZipFiles(dir, path+"/production_"+time.Now().Format("150405")+".zip", unzipFiles, conn); err != nil {
 		return
 	}
+
+}
+
+func (d *DeployService) AdminUI(conn *websocket.Conn, msg Message) {
+	conf := config.Configure{
+		ProjectConfig: config.Config.AdminUI.ProjectConfig,
+		GitConfig:     config.Config.AdminUI.GitConfig,
+		ZipName:       config.Config.AdminUI.ZipName,
+	}
+	if msg.Env == constant.Test {
+		conf.ClientConfig = config.Config.AdminUI.TestClientConfig
+		conf.ServerPath = config.Config.AdminUI.TestServerPath
+	}
+	if msg.Env == constant.Release {
+		conf.ClientConfig = config.Config.AdminUI.ReleaseClientConfig
+		conf.ServerPath = config.Config.AdminUI.ReleaseServerPath
+	}
+
+	err := os.Chdir(dir)
+	if err != nil {
+		d.Flush("Chdir err"+err.Error(), conn)
+		return
+	}
+	d.Flush("cd "+dir, conn)
+	defer func() {
+		_ = os.Chdir(dir)
+	}()
+
+	_, err = d.Git(conf, msg.Branch, msg.UserName, conn)
+	if err != nil {
+		d.Flush("Git err"+err.Error(), conn)
+		return
+	}
+
+	_ = os.Chdir(conf.ProjectPath + "/" + conf.ProjectName)
+	d.Flush("cd "+conf.ProjectPath+"/"+conf.ProjectName, conn)
+
+	_, _ = exec.Command("yarn", "config", "set", "registry", "https://registry.npmmirror.com/").CombinedOutput()
+
+	d.Flush("yarn install", conn)
+
+	out, err := exec.Command("yarn", "install").CombinedOutput()
+	if err != nil {
+		d.Flush(string(out)+err.Error(), conn)
+		return
+	}
+	d.Flush(string(out), conn)
+
+	d.Flush("yarn build", conn)
+	build, err := exec.Command("yarn", "build").CombinedOutput()
+	if err != nil {
+		d.Flush(string(build)+err.Error(), conn)
+		return
+	}
+	d.Flush(string(build), conn)
+
+	d.Flush("zip build", conn)
+	err = zipFolder("dist", "dist.zip")
+	if err != nil {
+		d.Flush("zip 压缩失败"+err.Error(), conn)
+	}
+	d.Flush("zip 压缩成功", conn)
+
+	err = d.adminUpload(conf, conn)
+	if err != nil {
+		d.Flush(err.Error(), conn)
+		return
+	}
+}
+
+func (d *DeployService) adminUpload(conf config.Configure, conn *websocket.Conn) error {
+	d.Flush("开始远程服务器 "+conf.Host+" 执行...🚀🚀🚀 ", conn)
+	// SSH 配置
+	c := &ssh.ClientConfig{
+		User: conf.User,
+		Auth: []ssh.AuthMethod{
+			ssh.Password(conf.Password),
+		},
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+	}
+
+	// 建立 SSH 连接
+	addr := fmt.Sprintf("%s:%s", conf.Host, conf.Port)
+	client, err := ssh.Dial("tcp", addr, c)
+	if err != nil {
+		return fmt.Errorf("无法连接到服务器: %w", err)
+	}
+	defer client.Close()
+
+	// 打开本地zip文件
+	localFile, err := os.Open(conf.ZipName)
+	if err != nil {
+		return fmt.Errorf("无法打开本地文件: %w", err)
+	}
+	defer localFile.Close()
+
+	// 创建 SSH 会话
+	session, err := client.NewSession()
+	if err != nil {
+		return fmt.Errorf("无法创建 SSH 会话: %w", err)
+	}
+	defer session.Close()
+
+	// 使用 SCP 传输文件命令
+	stdin, err := session.StdinPipe()
+	if err != nil {
+		return fmt.Errorf("无法获取标准输入管道: %w", err)
+	}
+
+	// 启动 SCP 命令来接收文件
+	if err := session.Start(fmt.Sprintf("scp -qt %s", conf.ServerPath)); err != nil {
+		return fmt.Errorf("无法启动会话: %w", err)
+	}
+
+	d.Flush("开始上传 "+conf.Host+" 🚀🚀🚀 ", conn)
+
+	// 文件传输前，必须要向远程服务器发送文件头信息，包括文件大小和权限
+	fileInfo, err := localFile.Stat()
+	if err != nil {
+		return fmt.Errorf("无法获取本地文件信息: %w", err)
+	}
+	fileSize := fileInfo.Size()
+	fileName := fileInfo.Name()
+	_, _ = fmt.Fprintf(stdin, "C0644 %d %s\n", fileSize, fileName)
+
+	mu.Lock()
+	writer, _ := conn.NextWriter(websocket.TextMessage)
+
+	newWriter := &newWriter{Wr: writer}
+
+	bar := progressbar.NewOptions64(
+		fileSize,
+		progressbar.OptionSetDescription("uploading:"),
+		progressbar.OptionSetWidth(10),
+		progressbar.OptionShowBytes(true),
+		progressbar.OptionSetWriter(newWriter),
+		progressbar.OptionSetTheme(progressbar.Theme{
+			Saucer:        "=",
+			SaucerHead:    ">",
+			SaucerPadding: "-",
+			BarStart:      "[",
+			BarEnd:        "]",
+		}),
+	)
+
+	bar.StartWithoutRender()
+
+	// 包装文件读取器，监控进度
+	_, _ = fmt.Fprintf(writer, "%s", bar.String())
+	progressReader := io.TeeReader(localFile, bar)
+
+	// 复制文件内容到远程服务器
+	if _, err := io.Copy(stdin, progressReader); err != nil {
+		return fmt.Errorf("文件传输失败: %w", err)
+	}
+
+	// 结束文件传输
+	_, _ = fmt.Fprint(stdin, "\x00")
+	_ = stdin.Close()
+	mu.Unlock()
+
+	d.Flush("上传完成 "+conf.Host+" ✌️✌️✌️ ", conn)
+
+	if err := session.Wait(); err != nil {
+		return fmt.Errorf("文件传输会话执行失败: %w", err)
+	}
+	d.Flush("<br>文件上传成功...✔️✔️✔️", conn)
+
+	// 重启
+	d.Flush("服务器开始执行...🚀🚀🚀", conn)
+	resession, err := client.NewSession()
+	if err != nil {
+		return fmt.Errorf("无法创建 SSH 会话: %w", err)
+	}
+	defer resession.Close()
+
+	re, err := resession.Output(fmt.Sprintf("cd %s && rm -rf ./dist && unzip -o ./dist.zip && /usr/bin/cp -f ./config.js ./dist/", conf.ServerPath))
+	if err != nil {
+		return fmt.Errorf("重启会话执行失败 ssh: command %v failed", err)
+	}
+	d.Flush(string(re), conn)
+	d.Flush("服务器重启成功...✔️✔️✔️", conn)
+	return nil
+}
+
+func zipFolder(folderPath, dest string) error {
+
+	// 创建一个新的ZIP文件
+	zipFile, err := os.Create(dest)
+	if err != nil {
+		return err
+	}
+	defer zipFile.Close()
+
+	// 创建一个新的ZIP写入器
+	zipWriter := zip.NewWriter(zipFile)
+	defer zipWriter.Close()
+
+	// 遍历文件夹
+	return filepath.Walk(folderPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		header, err := zip.FileInfoHeader(info)
+		if err != nil {
+			return err
+		}
+
+		// 将文件的相对路径作为header的名字
+		relPath, err := filepath.Rel(filepath.Dir(folderPath), path)
+		if err != nil {
+			return err
+		}
+		header.Name = filepath.ToSlash(relPath) // 使用斜杠而不是反斜杠以兼容不同操作系统
+		if info.IsDir() {
+			header.Name += "/"
+		}
+
+		// 使用Deflate压缩方法
+		header.Method = zip.Deflate
+		writer, err := zipWriter.CreateHeader(header)
+		if err != nil {
+			return err
+		}
+
+		if !info.IsDir() {
+			file, err := os.Open(path)
+			if err != nil {
+				return err
+			}
+			defer file.Close()
+			_, err = io.Copy(writer, file)
+			if err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
 
 }

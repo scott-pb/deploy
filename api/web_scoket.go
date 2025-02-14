@@ -146,13 +146,8 @@ func (w *WebSocket) WebSocketHandler(c *gin.Context) {
 				case constant.Release:
 					s.ServerRelease(ws, message)
 				}
-			case constant.Front:
-				switch message.Env {
-				case constant.Test:
-					s.ServerTest(ws, message)
-				case constant.Release:
-					s.ServerRelease(ws, message)
-				}
+			case constant.AdminUI:
+				s.AdminUI(ws, message)
 			}
 		}()
 	}
