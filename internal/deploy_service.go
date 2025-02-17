@@ -6,6 +6,8 @@ import (
 	"deploy/config"
 	"deploy/constant"
 	dlog "deploy/log"
+	"deploy/notify/common"
+	"deploy/notify/lark"
 	"errors"
 	"fmt"
 	"github.com/go-git/go-git/v5"
@@ -447,7 +449,10 @@ func (d *DeployService) Git(cfg config.Configure, branch, username string, conn 
 		return
 	}
 
-	_ = os.Chdir("depends")
+	err = os.Chdir("depends")
+	if err != nil {
+		return "🫵🫵🫵【打包人】:" + username + "🫵🫵🫵【git】" + log, nil
+	}
 
 	if err = gitCmdFun(mw, "fetch", "origin"); err != nil {
 		return
@@ -855,6 +860,7 @@ func (d *DeployService) ServerProduction(conn *websocket.Conn, msg Message) {
 }
 
 func (d *DeployService) AdminUI(conn *websocket.Conn, msg Message) {
+	var urlStr string
 	conf := config.Configure{
 		ProjectConfig: config.Config.AdminUI.ProjectConfig,
 		GitConfig:     config.Config.AdminUI.GitConfig,
@@ -863,10 +869,12 @@ func (d *DeployService) AdminUI(conn *websocket.Conn, msg Message) {
 	if msg.Env == constant.Test {
 		conf.ClientConfig = config.Config.AdminUI.TestClientConfig
 		conf.ServerPath = config.Config.AdminUI.TestServerPath
+		urlStr = "https://open.larksuite.com/open-apis/bot/v2/hook/81ccbebe-0bee-435c-b50c-11654637cce9"
 	}
 	if msg.Env == constant.Release {
 		conf.ClientConfig = config.Config.AdminUI.ReleaseClientConfig
 		conf.ServerPath = config.Config.AdminUI.ReleaseServerPath
+		urlStr = "https://open.larksuite.com/open-apis/bot/v2/hook/31cea604-c8c4-4bd9-9dac-0bccd9faa3f8"
 	}
 
 	err := os.Chdir(dir)
@@ -879,7 +887,7 @@ func (d *DeployService) AdminUI(conn *websocket.Conn, msg Message) {
 		_ = os.Chdir(dir)
 	}()
 
-	_, err = d.Git(conf, msg.Branch, msg.UserName, conn)
+	gitLog, err := d.Git(conf, msg.Branch, msg.UserName, conn)
 	if err != nil {
 		d.Flush("Git err"+err.Error(), conn)
 		return
@@ -889,6 +897,7 @@ func (d *DeployService) AdminUI(conn *websocket.Conn, msg Message) {
 	d.Flush("cd "+conf.ProjectPath+"/"+conf.ProjectName, conn)
 
 	_, _ = exec.Command("yarn", "config", "set", "registry", "https://registry.npmmirror.com/").CombinedOutput()
+	_ = exec.Command("export", "NODE_OPTIONS=\"--max-old-space-size=4096\"").Run()
 
 	d.Flush("yarn install", conn)
 
@@ -900,12 +909,19 @@ func (d *DeployService) AdminUI(conn *websocket.Conn, msg Message) {
 	d.Flush(string(out), conn)
 
 	d.Flush("yarn build", conn)
-	build, err := exec.Command("yarn", "build").CombinedOutput()
+	cmd := exec.Command("yarn", "build")
+
+	env := os.Environ()
+	env = append(env, "NODE_OPTIONS=--max-old-space-size=4096")
+	cmd.Env = env
+
+	buildOut, err := cmd.CombinedOutput()
+
 	if err != nil {
-		d.Flush(string(build)+err.Error(), conn)
+		d.Flush("yarn build 失败"+string(buildOut), conn)
 		return
 	}
-	d.Flush(string(build), conn)
+	d.Flush(string(buildOut), conn)
 
 	d.Flush("zip build", conn)
 	err = zipFolder("dist", "dist.zip")
@@ -919,6 +935,18 @@ func (d *DeployService) AdminUI(conn *websocket.Conn, msg Message) {
 		d.Flush(err.Error(), conn)
 		return
 	}
+
+	l, err := lark.Init(urlStr, "")
+	if err != nil {
+		return
+	}
+	_ = l.Send(common.Messages{
+		{Name: "通知类型", Value: "admin ui 发布"},
+		{Name: "打包分支", Value: msg.Env},
+		{Name: "GIT信息", Value: gitLog},
+		{Name: "打包IP", Value: gitLog},
+		{Name: "消息内容", Value: "Bob Say 今天走过了所有弯路，从此人生都是坦途"},
+	})
 }
 
 func (d *DeployService) adminUpload(conf config.Configure, conn *websocket.Conn) error {
